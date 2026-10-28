@@ -1,0 +1,51 @@
+services:
+  helpdesk-api:
+    build:
+      context: ./simulator
+      dockerfile: services/Dockerfile
+    environment:
+      HELPDESK_API_KEY: ${HELPDESK_API_KEY:-dev-key-change-me}
+      HELPDESK_TODAY: ${HELPDESK_TODAY:-}
+    ports:
+      - "${HELPDESK_PORT:-8102}:8102"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8102/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    environment:
+      HELPDESK_API_URL: http://helpdesk-api:8102
+      HELPDESK_API_KEY: ${HELPDESK_API_KEY:-dev-key-change-me}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      MODEL: ${MODEL:-openai/gpt-4.1-mini}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - helpdesk-data:/app/data
+    depends_on:
+      helpdesk-api:
+        condition: service_healthy
+
+  ui:
+    build: .
+    command: ["python", "ui/app_ui.py"]
+    environment:
+      APP_URL: http://app:8000
+      UI_PORT: "7860"
+    ports:
+      - "${UI_HOST_PORT:-7860}:7860"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  helpdesk-data:

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="580" viewBox="0 0 1200 580">
+  <style>text{font-family:Arial,sans-serif;font-size:18px;fill:#172033}.box{fill:#eef5ff;stroke:#2563eb;stroke-width:2}.safe{fill:#ecfdf5;stroke:#059669;stroke-width:2}.write{fill:#fff7ed;stroke:#ea580c;stroke-width:2}.line{stroke:#475569;stroke-width:2;marker-end:url(#arrow)}</style>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#475569"/></marker></defs>
+  <rect class="box" x="30" y="50" width="180" height="80" rx="8"/><text x="88" y="95">Gradio UI</text>
+  <rect class="box" x="285" y="50" width="220" height="80" rx="8"/><text x="338" y="95">FastAPI :8000</text>
+  <rect class="safe" x="570" y="30" width="255" height="120" rx="8"/><text x="615" y="78">Input/output guards</text><text x="617" y="105">Citation verifier</text>
+  <rect class="box" x="885" y="30" width="270" height="120" rx="8"/><text x="930" y="78">LangGraph roles</text><text x="910" y="105">Intake → Resolution</text>
+  <line class="line" x1="210" y1="90" x2="285" y2="90"/><line class="line" x1="505" y1="90" x2="570" y2="90"/><line class="line" x1="825" y1="90" x2="885" y2="90"/>
+  <rect class="safe" x="90" y="260" width="260" height="105" rx="8"/><text x="126" y="305">SQLite memory</text><text x="110" y="332">sessions + requester context</text>
+  <rect class="box" x="460" y="260" width="280" height="105" rx="8"/><text x="508" y="305">Hybrid retrieval</text><text x="482" y="332">current KB + precedence</text>
+  <rect class="box" x="850" y="260" width="255" height="105" rx="8"/><text x="912" y="305">stdio MCP</text><text x="879" y="332">read-only tool calls</text>
+  <line class="line" x1="1020" y1="150" x2="980" y2="260"/><line class="line" x1="760" y1="150" x2="630" y2="260"/><line class="line" x1="500" y1="150" x2="230" y2="260"/>
+  <rect class="write" x="405" y="445" width="380" height="90" rx="8"/><text x="478" y="482">Approval gate</text><text x="438" y="510">stored draft → approved write only</text>
+  <rect class="box" x="900" y="445" width="250" height="90" rx="8"/><text x="934" y="482">Helpdesk API :8102</text><text x="946" y="510">simulated system</text>
+  <line class="line" x1="978" y1="365" x2="1050" y2="445"/><line class="line" x1="600" y1="365" x2="600" y2="445"/><line class="line" x1="785" y1="490" x2="900" y2="490"/>
+</svg>
