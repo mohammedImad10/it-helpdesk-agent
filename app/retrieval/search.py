@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any
 
 import fitz
+import numpy as np
 import yaml
 
-from app.config import INDEX_PATH, KB_ROOT
+from app.config import EMBEDDING_MODEL, INDEX_PATH, KB_ROOT
+from app.retrieval.embeddings import EmbeddingProvider, build_embeddings
 from app.retrieval.precedence import eligible
 
 
@@ -18,6 +20,7 @@ class Chunk:
     text: str
     metadata: dict[str, Any]
     source_path: str
+    embedding: list[float] | None = None
 
 
 def _front_matter(text: str) -> tuple[dict[str, Any], str]:
@@ -37,7 +40,9 @@ class KnowledgeBase:
         self.chunks = chunks
 
     @classmethod
-    def build(cls, source: Path = KB_ROOT) -> "KnowledgeBase":
+    def build(
+        cls, source: Path = KB_ROOT, embedding_provider: EmbeddingProvider | None = None
+    ) -> "KnowledgeBase":
         chunks: list[Chunk] = []
         for path in sorted(source.iterdir()):
             if path.suffix not in {".md", ".pdf"}:
@@ -48,34 +53,68 @@ class KnowledgeBase:
             metadata, body = _front_matter(text)
             for section in _sections(body):
                 chunks.append(Chunk(section, metadata, str(path)))
+        vectors = build_embeddings(
+            embedding_provider if embedding_provider is not None else EmbeddingProvider.from_environment(),
+            [chunk.text for chunk in chunks],
+        )
+        for chunk, vector in zip(chunks, vectors, strict=True):
+            chunk.embedding = vector
         return cls(chunks)
 
     @classmethod
     def load_or_build(cls) -> "KnowledgeBase":
         if INDEX_PATH.exists():
             saved = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
-            return cls([Chunk(**item) for item in saved])
+            if isinstance(saved, dict) and saved.get("embedding_model") == EMBEDDING_MODEL:
+                return cls([Chunk(**item) for item in saved["chunks"]])
         kb = cls.build()
         kb.persist()
         return kb
 
     def persist(self) -> None:
         INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
-        INDEX_PATH.write_text(json.dumps([asdict(chunk) for chunk in self.chunks], default=str), encoding="utf-8")
+        INDEX_PATH.write_text(
+            json.dumps(
+                {
+                    "embedding_model": EMBEDDING_MODEL,
+                    "chunks": [asdict(chunk) for chunk in self.chunks],
+                },
+                default=str,
+            ),
+            encoding="utf-8",
+        )
+
+    @property
+    def has_embeddings(self) -> bool:
+        return bool(self.chunks) and all(chunk.embedding is not None for chunk in self.chunks)
+
+    def _query_embedding(self, query: str) -> list[float] | None:
+        provider = EmbeddingProvider.from_environment()
+        if provider is None or not self.has_embeddings:
+            return None
+        return provider.embed([query])[0]
 
     def search(self, query: str, department: str | None = None, limit: int = 5) -> list[Chunk]:
         terms = set(re.findall(r"[a-z0-9-]+", query.lower()))
         error_codes = set(re.findall(r"\b[A-Z]{2,4}-\d{2,4}\b", query.upper()))
         candidates = eligible([asdict(chunk) for chunk in self.chunks], department)
+        query_embedding = self._query_embedding(query)
+        query_norm = np.linalg.norm(query_embedding) if query_embedding is not None else 0.0
 
-        def score(item: dict[str, Any]) -> tuple[int, int, str]:
+        def score(item: dict[str, Any]) -> tuple[int, float, int, str]:
             chunk = item["text"].lower()
             meta = item["metadata"]
             exact = len(error_codes.intersection(set(meta.get("error_codes") or [])))
             words = sum(term in chunk for term in terms if len(term) > 2)
-            return exact, words, str(meta["id"])
+            vector = item.get("embedding")
+            semantic = 0.0
+            if query_embedding is not None and vector is not None and query_norm:
+                vector_array = np.asarray(vector, dtype=float)
+                denominator = np.linalg.norm(vector_array) * query_norm
+                semantic = float(np.dot(vector_array, query_embedding) / denominator) if denominator else 0.0
+            return exact, semantic, words, str(meta["id"])
 
-        matching = [item for item in candidates if score(item)[:2] != (0, 0)]
+        matching = [item for item in candidates if score(item)[:3] != (0, 0.0, 0)]
         return [Chunk(**item) for item in sorted(matching, key=score, reverse=True)[:limit]]
 
     def by_id(self, doc_id: str) -> Chunk | None:

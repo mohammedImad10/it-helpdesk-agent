@@ -30,7 +30,7 @@ For a component-by-component explanation and workflow diagrams, see the
 | Component | Real or simulated? | Notes |
 |---|---|---|
 | OpenRouter chat model | **Real** | `openai/gpt-4.1-mini`; requires your `OPENROUTER_API_KEY` |
-| OpenRouter embeddings boundary | **Real provider boundary** | Retrieval remains deterministic keyword/error-code fallback if no key is configured |
+| OpenRouter embeddings | **Real** | `openai/text-embedding-3-small` powers persisted semantic vectors and cosine ranking |
 | Nakhla Helpdesk API and MCP server | **Simulated** | Bootcamp-supplied REST API + stdio MCP with fault injection |
 | Nakhla knowledge base and ticket archive | **Simulated** | Bootcamp-supplied fictional training data |
 | SQLite memory | **Local** | Persisted Docker volume / local `data/` directory |
@@ -114,8 +114,8 @@ credit limit on the project key and record model costs from production/demo trac
 
 ## What I’d fix next
 
-- Add a semantic vector store that uses real OpenRouter embeddings when a key is configured, then
-  benchmark it against the current exact error-code and keyword retrieval.
+- Benchmark the OpenRouter embedding ranking against the deterministic exact-error-code and
+  keyword signals on a labelled retrieval-recall set.
 - Add authenticated per-employee UI sessions and a user-visible support-history screen.
 - Record the final 3-minute demo, add its link above, publish the repository, and complete the
   bootcamp check-in issue comments.

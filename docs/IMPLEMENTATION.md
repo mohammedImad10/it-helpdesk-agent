@@ -193,8 +193,12 @@ Each persisted chunk keeps:
 - `applies_to`
 - Source path
 
-Search first rewards exact error-code matches, then relevant keyword matches. The retrieval layer
-filters and ranks sources in deterministic Python:
+In deployed mode, ingestion sends each section to OpenRouter
+`openai/text-embedding-3-small` and persists the resulting vectors in `data/kb_index.json`.
+At query time, the agent embeds the request and calculates cosine similarity. Search ranks exact
+error-code matches first, semantic similarity second, and relevant keyword matches third. When no
+OpenRouter key is configured, it explicitly uses the deterministic error-code/keyword fallback.
+The retrieval layer filters and ranks sources in deterministic Python:
 
 1. Exclude every non-`current` document.
 2. Place `SP-*` security policies before `KB-*` sources.
