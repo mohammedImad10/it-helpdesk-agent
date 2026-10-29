@@ -4,8 +4,11 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY_ROOT = PROJECT_ROOT.parent
+load_dotenv(PROJECT_ROOT / ".env")
 SIMULATOR_ROOT = PROJECT_ROOT / "simulator"
 KIT_ROOT = SIMULATOR_ROOT if SIMULATOR_ROOT.is_dir() else (
     REPOSITORY_ROOT / "Final-Mini-Project" / "scenario-2-it-helpdesk" / "kit"
