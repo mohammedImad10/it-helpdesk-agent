@@ -37,7 +37,11 @@ class OpenRouterRoles:
     async def _json(self, role: str, prompt: str, fallback: dict[str, Any]) -> tuple[dict[str, Any], ToolCall]:
         started = time.perf_counter()
         if self.client is None:
-            return fallback, ToolCall(tool=role, ok=True, ms=0)
+            return fallback, ToolCall(
+                tool=f"{role}:fallback_no_api_key",
+                ok=True,
+                ms=0,
+            )
         try:
             completion = await self.client.chat.completions.create(
                 model=MODEL,
@@ -56,9 +60,17 @@ class OpenRouterRoles:
             )
             content = completion.choices[0].message.content or "{}"
             payload = json.loads(content)
-            return payload, ToolCall(tool=role, ok=True, ms=round((time.perf_counter() - started) * 1000))
+            return payload, ToolCall(
+                tool=f"{role}:openrouter",
+                ok=True,
+                ms=round((time.perf_counter() - started) * 1000),
+            )
         except Exception:
-            return fallback, ToolCall(tool=role, ok=False, ms=round((time.perf_counter() - started) * 1000))
+            return fallback, ToolCall(
+                tool=f"{role}:fallback_after_provider_error",
+                ok=False,
+                ms=round((time.perf_counter() - started) * 1000),
+            )
 
     async def intake(self, message: str, fallback_topic: str, code: str | None) -> tuple[IntakeDecision, ToolCall]:
         payload, trace = await self._json(

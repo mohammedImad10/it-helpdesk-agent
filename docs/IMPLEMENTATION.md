@@ -90,6 +90,8 @@ sequenceDiagram
 The role calls use OpenRouter when configured. If no key is present, the application records the
 same role boundary but uses safe deterministic fallback decisions so local validation can run
 without a paid key. A deployed, agentic demonstration should configure `OPENROUTER_API_KEY`.
+The UI identifies the actual mode in its tool trace: `:openrouter`, `:fallback_no_api_key`, or
+`:fallback_after_provider_error`.
 
 ### 3.2 Ticket approval lifecycle
 

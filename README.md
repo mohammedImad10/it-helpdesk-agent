@@ -112,6 +112,20 @@ The deterministic validation run measured the latencies above without an OpenRou
 deployed mode, OpenRouter usage is confined to the two JSON role calls per turn; configure a
 credit limit on the project key and record model costs from production/demo traces.
 
+### Confirming runtime mode
+
+The UI's **Tool calls (last turn)** panel now identifies each role invocation:
+
+- `intake_safety_role:openrouter` and `resolution_escalation_role:openrouter` mean the real
+  OpenRouter model was called successfully.
+- `...:fallback_no_api_key` means no `OPENROUTER_API_KEY` was available, so safe deterministic
+  fallback behavior was used.
+- `...:fallback_after_provider_error` means the provider call failed; the tool line is marked
+  failed and the agent used its safe fallback rather than pretending a model response succeeded.
+
+During ingestion, `python scripts/ingest_kb.py` prints either
+`using OpenRouter semantic vectors` or `using keyword/error-code fallback`.
+
 ## What I’d fix next
 
 - Benchmark the OpenRouter embedding ranking against the deterministic exact-error-code and
