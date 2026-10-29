@@ -40,6 +40,15 @@ class HelpdeskWorkflow:
                 steps.append(f"Employee reported: {phrase}.")
         return steps or [f"Employee reported {code or 'the issue'} and requested help."]
 
+    @staticmethod
+    def _accepts_escalation(message: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:yes|please|go ahead|do it|open|create|file|raise|prepare)\b",
+                message.lower(),
+            )
+        )
+
     def _draft(
         self,
         session_id: str,
@@ -90,6 +99,12 @@ class HelpdeskWorkflow:
                 tool_calls=[guard_trace],
             )
         session = sessions.get(session_id)
+        awaiting_escalation = session.awaiting == "escalation_confirmation"
+        reported_message = (
+            str(session.issue.get("reported_message", message))
+            if awaiting_escalation
+            else message
+        )
         if email:
             session.email = email.lower()
             sessions.save(session_id, session)
@@ -155,7 +170,11 @@ class HelpdeskWorkflow:
             asks_for_ticket=issue.asks_for_ticket,
             affected_users=issue.affected_users,
         )
-        session.issue = {"code": issue.code, "topic": issue.topic}
+        session.issue = {
+            "code": issue.code,
+            "topic": issue.topic,
+            "reported_message": reported_message,
+        }
         session.awaiting = None
         sessions.save(session_id, session)
         incident = self._incident(status_result, issue)
@@ -277,6 +296,20 @@ class HelpdeskWorkflow:
                 citations=self._citation(str(selected.metadata["id"])),
                 tool_calls=traces,
             )
+        if awaiting_escalation and self._accepts_escalation(message):
+            response = self._draft(
+                session_id,
+                reported_message,
+                issue,
+                employee,
+                "other",
+                "P3",
+                [],
+            )
+            response.tool_calls = traces
+            return response
+        session.awaiting = "escalation_confirmation"
+        sessions.save(session_id, session)
         return ChatResponse(
             session_id=session_id,
             reply="The knowledge base has no documented fix for this issue. I will not invent troubleshooting steps; I can prepare an escalation ticket if you want.",
