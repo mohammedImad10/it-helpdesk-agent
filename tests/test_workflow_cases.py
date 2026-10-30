@@ -1,11 +1,17 @@
+import uuid
+
 import pytest
 
+from app.approval import approve
 from app.models import ToolCall
 from app.retrieval.search import KnowledgeBase
+from app.services.sessions import sessions
 from app.workflow import HelpdeskWorkflow
 
 
 class FakeMcpClient:
+    create_calls = 0
+
     async def lookup_employee(self, email: str):
         return (
             {
@@ -25,14 +31,22 @@ class FakeMcpClient:
             ToolCall(tool="get_service_status", ok=True, ms=1),
         )
 
+    async def create_ticket(self, draft: dict, idempotency_key: str):
+        type(self).create_calls += 1
+        return (
+            {"ok": True, "ticket": {"ticket_id": "IT-2001"}},
+            ToolCall(tool="create_ticket", ok=True, ms=1),
+        )
+
 
 @pytest.mark.asyncio
 async def test_nx_403_returns_documented_steps_before_a_ticket(monkeypatch) -> None:
     monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
     workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    session_id = f"nx-403-test-{uuid.uuid4()}"
 
     response = await workflow.chat(
-        "nx-403-test",
+        session_id,
         "My VPN shows NX-403 since this morning. I approved the NakhlaKey prompt twice.",
         "tariq.hamdan@nakhla.example",
     )
@@ -46,14 +60,15 @@ async def test_nx_403_returns_documented_steps_before_a_ticket(monkeypatch) -> N
 async def test_unknown_issue_can_be_escalated_after_user_confirms(monkeypatch) -> None:
     monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
     workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    session_id = f"crm-escalation-test-{uuid.uuid4()}"
 
     initial = await workflow.chat(
-        "crm-escalation-test",
+        session_id,
         "The NakhlaCRM mobile app shows error CRM-1150 every time it syncs my contacts.",
         "omar.farah@nakhla.example",
     )
     response = await workflow.chat(
-        "crm-escalation-test",
+        session_id,
         "Yes, please create a ticket.",
         None,
     )
@@ -65,3 +80,52 @@ async def test_unknown_issue_can_be_escalated_after_user_confirms(monkeypatch) -
     assert response.pending_action.payload["priority"] == "P3"
     assert response.pending_action.payload["kb_refs"] == []
     assert "CRM-1150" in response.pending_action.payload["description"]
+
+
+@pytest.mark.asyncio
+async def test_documented_fix_follow_up_saves_resolution_memory(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
+    workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    email = "follow-up-worked@nakhla.example"
+    session_id = f"documented-worked-test-{uuid.uuid4()}"
+
+    initial = await workflow.chat(
+        session_id,
+        "My VPN shows NX-403.",
+        email,
+    )
+    response = await workflow.chat(session_id, "It worked.", None)
+
+    assert initial.state == "awaiting_follow_up"
+    assert response.state == "resolved"
+    assert sessions.memory_for(email) == (
+        "Resolved NX-403 using the documented troubleshooting procedure.",
+        None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_documented_fix_failure_requires_escalation_and_approval(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
+    monkeypatch.setattr("app.approval.HelpdeskMcpClient", FakeMcpClient)
+    workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    session_id = f"documented-escalation-test-{uuid.uuid4()}"
+    FakeMcpClient.create_calls = 0
+
+    initial = await workflow.chat(
+        session_id,
+        "My VPN shows NX-403 and blocks my work.",
+        "follow-up-failed@nakhla.example",
+    )
+    declined = await workflow.chat(session_id, "It did not work.", None)
+    draft = await workflow.chat(session_id, "Yes, prepare the ticket.", None)
+
+    assert initial.state == "awaiting_follow_up"
+    assert declined.state == "escalation_offered"
+    assert draft.pending_action is not None
+    assert FakeMcpClient.create_calls == 0
+    approval = await approve(session_id, draft.pending_action.action_id, True)
+
+    assert approval.result == {"ticket_id": "IT-2001"}
+    assert "created" in approval.reply.lower()
+    assert FakeMcpClient.create_calls == 1

@@ -49,6 +49,59 @@ class HelpdeskWorkflow:
             )
         )
 
+    @staticmethod
+    def _reports_worked(message: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:yes(?:,? it did)?|it worked|worked|fixed|resolved|all set)\b",
+                message.lower(),
+            )
+        )
+
+    @staticmethod
+    def _reports_not_worked(message: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:no|not working|did not work|didn't work|still (?:broken|failing|not working)|problem persists)\b",
+                message.lower(),
+            )
+        )
+
+    @staticmethod
+    def _escalation_category(issue: Issue) -> str:
+        return {
+            "vpn": "network_access",
+            "identity": "identity_access",
+            "software": "software",
+            "hardware": "hardware",
+        }.get(issue.topic, "other")
+
+    def _documented_response(
+        self,
+        session_id: str,
+        session: Any,
+        issue: Issue,
+        reported_message: str,
+        reply: str,
+        refs: list[str],
+        traces: list[ToolCall],
+    ) -> ChatResponse:
+        session.issue = {
+            "code": issue.code,
+            "topic": issue.topic,
+            "reported_message": reported_message,
+            "kb_refs": refs,
+        }
+        session.awaiting = "worked_confirmation"
+        sessions.save(session_id, session)
+        return ChatResponse(
+            session_id=session_id,
+            reply=f"{reply} Did that resolve the issue?",
+            state="awaiting_follow_up",
+            citations=self._citation(*refs),
+            tool_calls=traces,
+        )
+
     def _draft(
         self,
         session_id: str,
@@ -99,6 +152,7 @@ class HelpdeskWorkflow:
                 tool_calls=[guard_trace],
             )
         session = sessions.get(session_id)
+        awaiting_worked = session.awaiting == "worked_confirmation"
         awaiting_escalation = session.awaiting == "escalation_confirmation"
         reported_message = (
             str(session.issue.get("reported_message", message))
@@ -108,6 +162,40 @@ class HelpdeskWorkflow:
         if email:
             session.email = email.lower()
             sessions.save(session_id, session)
+        if awaiting_worked:
+            if self._reports_worked(message):
+                summary = (
+                    f"Resolved {session.issue.get('code') or session.issue.get('topic', 'support issue')} "
+                    "using the documented troubleshooting procedure."
+                )
+                if session.email:
+                    sessions.remember(session.email, summary)
+                session.awaiting = None
+                sessions.save(session_id, session)
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I'm glad that resolved it. I recorded the resolution for future support.",
+                    state="resolved",
+                    citations=self._citation(*[str(ref) for ref in session.issue.get("kb_refs", [])]),
+                    tool_calls=[guard_trace],
+                )
+            if self._reports_not_worked(message):
+                session.awaiting = "escalation_confirmation"
+                sessions.save(session_id, session)
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I'm sorry that did not resolve it. Would you like me to prepare an escalation ticket for your approval?",
+                    state="escalation_offered",
+                    citations=self._citation(*[str(ref) for ref in session.issue.get("kb_refs", [])]),
+                    tool_calls=[guard_trace],
+                )
+            return ChatResponse(
+                session_id=session_id,
+                reply="Did the documented procedure resolve the issue? Please reply yes or no.",
+                state="awaiting_follow_up",
+                citations=self._citation(*[str(ref) for ref in session.issue.get("kb_refs", [])]),
+                tool_calls=[guard_trace],
+            )
         issue = extract_issue(message)
         if issue.code is None and session.issue.get("code"):
             issue = Issue(
@@ -151,6 +239,36 @@ class HelpdeskWorkflow:
                 session_id=session_id,
                 reply="I could not check the live service status, so I will not provide troubleshooting or create a ticket yet.",
                 state="status_unavailable",
+                tool_calls=traces,
+            )
+        if awaiting_escalation:
+            stored_issue = session.issue
+            issue = Issue(
+                code=str(stored_issue["code"]) if stored_issue.get("code") else None,
+                topic=str(stored_issue.get("topic", "other")),
+                asks_for_ticket=False,
+                affected_users=1,
+            )
+            refs = [str(ref) for ref in stored_issue.get("kb_refs", [])]
+            if self._accepts_escalation(message):
+                session.awaiting = None
+                sessions.save(session_id, session)
+                response = self._draft(
+                    session_id,
+                    reported_message,
+                    issue,
+                    employee,
+                    self._escalation_category(issue),
+                    "P1" if employee["vip"] else "P3",
+                    refs,
+                )
+                response.tool_calls = traces
+                return response
+            return ChatResponse(
+                session_id=session_id,
+                reply="I will not create a ticket unless you ask me to prepare one for approval.",
+                state="escalation_offered",
+                citations=self._citation(*refs),
                 tool_calls=traces,
             )
 
@@ -208,27 +326,23 @@ class HelpdeskWorkflow:
             return response
 
         if issue.code == "NID-423":
-            return ChatResponse(
-                session_id=session_id,
-                reply=(
+            return self._documented_response(
+                session_id, session, issue, reported_message,
+                (
                     "Your account locks after five failed sign-ins in 15 minutes. Wait 30 minutes for it to unlock, "
                     "or unlock it now at https://id.nakhla.example/unlock and approve the NakhlaKey prompt."
                 ),
-                state="resolved",
-                citations=self._citation("KB-006"),
-                tool_calls=traces,
+                ["KB-006"], traces,
             )
 
         if issue.code == "NX-781":
-            return ChatResponse(
-                session_id=session_id,
-                reply=(
+            return self._documented_response(
+                session_id, session, issue, reported_message,
+                (
                     "NX-781 means your NakhlaConnect client is below the supported version. Update to 5.4.2 from "
                     "Software Center, then restart NakhlaConnect. Do not bypass the version check."
                 ),
-                state="resolved",
-                citations=self._citation("KB-002", "SP-002"),
-                tool_calls=traces,
+                ["KB-002", "SP-002"], traces,
             )
 
         if issue.code == "NX-112":
@@ -239,15 +353,13 @@ class HelpdeskWorkflow:
                 )
                 response.tool_calls = traces
                 return response
-            return ChatResponse(
-                session_id=session_id,
-                reply=(
+            return self._documented_response(
+                session_id, session, issue, reported_message,
+                (
                     "For NX-112, open NakhlaManage and run Sync, restart the laptop, then check it is compliant. "
                     "A device offline for more than 30 days must sync before VPN works."
                 ),
-                state="resolved",
-                citations=self._citation("KB-002"),
-                tool_calls=traces,
+                ["KB-002"], traces,
             )
 
         if issue.code == "NX-403":
@@ -258,16 +370,14 @@ class HelpdeskWorkflow:
                 )
                 response.tool_calls = traces
                 return response
-            return ChatResponse(
-                session_id=session_id,
-                reply=(
+            return self._documented_response(
+                session_id, session, issue, reported_message,
+                (
                     "NX-403 means access was denied. Approve the NakhlaKey prompt within 60 seconds, "
                     "confirm you are enrolled in NakhlaKey, and ask for the VPN-Users access request "
                     "if you are new or recently transferred. A disabled account can also show NX-403."
                 ),
-                state="resolved",
-                citations=self._citation("KB-002", "KB-007"),
-                tool_calls=traces,
+                ["KB-002", "KB-007"], traces,
             )
 
         if issue.topic == "software" and issue.asks_for_ticket:
@@ -296,18 +406,6 @@ class HelpdeskWorkflow:
                 citations=self._citation(str(selected.metadata["id"])),
                 tool_calls=traces,
             )
-        if awaiting_escalation and self._accepts_escalation(message):
-            response = self._draft(
-                session_id,
-                reported_message,
-                issue,
-                employee,
-                "other",
-                "P3",
-                [],
-            )
-            response.tool_calls = traces
-            return response
         session.awaiting = "escalation_confirmation"
         sessions.save(session_id, session)
         return ChatResponse(
