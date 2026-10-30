@@ -22,6 +22,7 @@ class Session:
     email: str | None = None
     issue: dict[str, object] = field(default_factory=dict)
     awaiting: str | None = None
+    decision: str = "idle"
     actions: dict[str, StoredAction] = field(default_factory=dict)
 
 
@@ -34,9 +35,16 @@ class SessionStore:
         self.connection.execute(
             """CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY, email TEXT, issue_json TEXT NOT NULL,
-                awaiting TEXT, updated_at TEXT NOT NULL
+                awaiting TEXT, decision TEXT NOT NULL DEFAULT 'idle', updated_at TEXT NOT NULL
             )"""
         )
+        columns = {
+            row[1] for row in self.connection.execute("PRAGMA table_info(sessions)")
+        }
+        if "decision" not in columns:
+            self.connection.execute(
+                "ALTER TABLE sessions ADD COLUMN decision TEXT NOT NULL DEFAULT 'idle'"
+            )
         self.connection.execute(
             """CREATE TABLE IF NOT EXISTS pending_actions (
                 action_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, action_json TEXT NOT NULL,
@@ -52,7 +60,7 @@ class SessionStore:
 
     def get(self, session_id: str) -> Session:
         row = self.connection.execute(
-            "SELECT email, issue_json, awaiting FROM sessions WHERE session_id = ?", (session_id,)
+            "SELECT email, issue_json, awaiting, decision FROM sessions WHERE session_id = ?", (session_id,)
         ).fetchone()
         if row is None:
             return Session()
@@ -64,15 +72,28 @@ class SessionStore:
             actions[action.action_id] = StoredAction(
                 action=action, draft=TicketDraft.model_validate_json(action_row[1]), consumed=bool(action_row[2])
             )
-        return Session(email=row[0], issue=json.loads(row[1]), awaiting=row[2], actions=actions)
+        return Session(
+            email=row[0],
+            issue=json.loads(row[1]),
+            awaiting=row[2],
+            decision=row[3],
+            actions=actions,
+        )
 
     def save(self, session_id: str, session: Session) -> None:
         self.connection.execute(
-            """INSERT INTO sessions(session_id, email, issue_json, awaiting, updated_at)
-               VALUES(?, ?, ?, ?, ?)
+            """INSERT INTO sessions(session_id, email, issue_json, awaiting, decision, updated_at)
+               VALUES(?, ?, ?, ?, ?, ?)
                ON CONFLICT(session_id) DO UPDATE SET email=excluded.email, issue_json=excluded.issue_json,
-               awaiting=excluded.awaiting, updated_at=excluded.updated_at""",
-            (session_id, session.email, json.dumps(session.issue), session.awaiting, self._now()),
+               awaiting=excluded.awaiting, decision=excluded.decision, updated_at=excluded.updated_at""",
+            (
+                session_id,
+                session.email,
+                json.dumps(session.issue),
+                session.awaiting,
+                session.decision,
+                self._now(),
+            ),
         )
         self.connection.commit()
 

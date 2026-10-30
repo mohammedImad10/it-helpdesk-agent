@@ -33,5 +33,6 @@ def test_session_and_requester_memory_survive_store_recreation(tmp_path: Path) -
 
     second = SessionStore(database)
     assert second.get("session-1").issue == {"code": "NX-112"}
+    assert second.get("session-1").decision == "idle"
     assert second.get_action("session-1", "act-1") is not None
     assert second.memory_for(session.email) == ("Created IT-2001 for NX-112.", "IT-2001")

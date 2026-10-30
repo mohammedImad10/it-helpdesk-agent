@@ -45,7 +45,7 @@ the blocking items first, then rerun the verification commands in the relevant t
     resolution memory, and documented answer → “it did not work” → escalation draft
     → approval → one created ticket.
 
-- [ ] **Align workflow branches with the request-resolution diagram**
+- [x] **Align workflow branches with the request-resolution diagram**
   - **Gap:** The core branches exist, but the code does not yet make the complete
     state-machine flow explicit: known incident, missing context, evidence, worked,
     escalation choice, draft, approval, write result, and next-step/rejection.

@@ -76,6 +76,12 @@ class HelpdeskWorkflow:
             "hardware": "hardware",
         }.get(issue.topic, "other")
 
+    @staticmethod
+    def _save_decision(session_id: str, session: Any, decision: str, awaiting: str | None = None) -> None:
+        session.decision = decision
+        session.awaiting = awaiting
+        sessions.save(session_id, session)
+
     def _documented_response(
         self,
         session_id: str,
@@ -92,8 +98,7 @@ class HelpdeskWorkflow:
             "reported_message": reported_message,
             "kb_refs": refs,
         }
-        session.awaiting = "worked_confirmation"
-        sessions.save(session_id, session)
+        self._save_decision(session_id, session, "worked_confirmation", "worked_confirmation")
         return ChatResponse(
             session_id=session_id,
             reply=f"{reply} Did that resolve the issue?",
@@ -133,6 +138,8 @@ class HelpdeskWorkflow:
             payload=draft.model_dump(),
         )
         sessions.put_action(session_id, StoredAction(action=action, draft=draft))
+        session = sessions.get(session_id)
+        self._save_decision(session_id, session, "draft_pending_approval", "approval")
         return ChatResponse(
             session_id=session_id,
             reply=f"I prepared this ticket for your approval: {action.summary}",
@@ -162,6 +169,15 @@ class HelpdeskWorkflow:
         if email:
             session.email = email.lower()
             sessions.save(session_id, session)
+        if session.awaiting == "approval":
+            pending = next((stored.action for stored in session.actions.values() if not stored.consumed), None)
+            return ChatResponse(
+                session_id=session_id,
+                reply="This ticket draft is waiting for your approval. Approve or reject it before starting another request.",
+                state="await_confirmation",
+                pending_action=pending,
+                tool_calls=[guard_trace],
+            )
         if awaiting_worked:
             if self._reports_worked(message):
                 summary = (
@@ -170,8 +186,7 @@ class HelpdeskWorkflow:
                 )
                 if session.email:
                     sessions.remember(session.email, summary)
-                session.awaiting = None
-                sessions.save(session_id, session)
+                self._save_decision(session_id, session, "resolved")
                 return ChatResponse(
                     session_id=session_id,
                     reply="I'm glad that resolved it. I recorded the resolution for future support.",
@@ -180,8 +195,7 @@ class HelpdeskWorkflow:
                     tool_calls=[guard_trace],
                 )
             if self._reports_not_worked(message):
-                session.awaiting = "escalation_confirmation"
-                sessions.save(session_id, session)
+                self._save_decision(session_id, session, "escalation_choice", "escalation_confirmation")
                 return ChatResponse(
                     session_id=session_id,
                     reply="I'm sorry that did not resolve it. Would you like me to prepare an escalation ticket for your approval?",
@@ -205,7 +219,7 @@ class HelpdeskWorkflow:
                 affected_users=issue.affected_users,
             )
         if issue.code is None and issue.topic == "vpn":
-            session.awaiting = "error_code"
+            self._save_decision(session_id, session, "missing_context", "error_code")
             return ChatResponse(
                 session_id=session_id,
                 reply="What error code does NakhlaConnect show (for example NX-403), and what is your Nakhla work email?",
@@ -213,7 +227,7 @@ class HelpdeskWorkflow:
                 tool_calls=[guard_trace],
             )
         if not session.email:
-            session.awaiting = "email"
+            self._save_decision(session_id, session, "missing_context", "email")
             return ChatResponse(
                 session_id=session_id,
                 reply="Please provide your Nakhla work email so I can check the applicable department and device rules.",
@@ -251,8 +265,7 @@ class HelpdeskWorkflow:
             )
             refs = [str(ref) for ref in stored_issue.get("kb_refs", [])]
             if self._accepts_escalation(message):
-                session.awaiting = None
-                sessions.save(session_id, session)
+                self._save_decision(session_id, session, "escalation_selected")
                 response = self._draft(
                     session_id,
                     reported_message,
@@ -293,10 +306,10 @@ class HelpdeskWorkflow:
             "topic": issue.topic,
             "reported_message": reported_message,
         }
-        session.awaiting = None
-        sessions.save(session_id, session)
+        self._save_decision(session_id, session, "evidence")
         incident = self._incident(status_result, issue)
         if incident is not None:
+            self._save_decision(session_id, session, "active_incident")
             return ChatResponse(
                 session_id=session_id,
                 reply=f"{incident['id']} is an active incident: {incident['title']}. {incident['workaround']} {incident['instructions']}",
@@ -305,6 +318,7 @@ class HelpdeskWorkflow:
             )
 
         if issue.topic == "vpn" and employee["department"] == "Contractors":
+            self._save_decision(session_id, session, "resolved")
             return ChatResponse(
                 session_id=session_id,
                 reply="Contractors do not receive VPN access. Use the Nakhla Workspace VDI portal at https://vdi.nakhla.example; VPN access requests are refused and no ticket is needed.",
@@ -399,6 +413,7 @@ class HelpdeskWorkflow:
         documented_code = any(issue.code in chunk.metadata.get("error_codes", []) for chunk in found) if issue.code else False
         if found and documented_code:
             selected = found[0]
+            self._save_decision(session_id, session, "evidence")
             return ChatResponse(
                 session_id=session_id,
                 reply=f"I found {selected.metadata['id']}, but this issue needs the documented procedure reviewed before I give steps.",
@@ -406,8 +421,7 @@ class HelpdeskWorkflow:
                 citations=self._citation(str(selected.metadata["id"])),
                 tool_calls=traces,
             )
-        session.awaiting = "escalation_confirmation"
-        sessions.save(session_id, session)
+        self._save_decision(session_id, session, "escalation_choice", "escalation_confirmation")
         return ChatResponse(
             session_id=session_id,
             reply="The knowledge base has no documented fix for this issue. I will not invent troubleshooting steps; I can prepare an escalation ticket if you want.",

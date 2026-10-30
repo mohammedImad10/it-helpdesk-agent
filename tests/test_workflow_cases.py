@@ -39,6 +39,28 @@ class FakeMcpClient:
         )
 
 
+class ActiveIncidentMcpClient(FakeMcpClient):
+    async def get_service_status(self):
+        return (
+            {
+                "ok": True,
+                "status": {
+                    "incidents": [
+                        {
+                            "id": "INC-100",
+                            "status": "active",
+                            "title": "VPN outage",
+                            "workaround": "Use VDI.",
+                            "instructions": "Wait for the incident update.",
+                            "error_codes": ["NX-403"],
+                        }
+                    ]
+                },
+            },
+            ToolCall(tool="get_service_status", ok=True, ms=1),
+        )
+
+
 @pytest.mark.asyncio
 async def test_nx_403_returns_documented_steps_before_a_ticket(monkeypatch) -> None:
     monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
@@ -54,6 +76,7 @@ async def test_nx_403_returns_documented_steps_before_a_ticket(monkeypatch) -> N
     assert response.pending_action is None
     assert "VPN-Users" in response.reply
     assert [citation.id for citation in response.citations] == ["KB-002", "KB-007"]
+    assert sessions.get(session_id).decision == "worked_confirmation"
 
 
 @pytest.mark.asyncio
@@ -80,6 +103,43 @@ async def test_unknown_issue_can_be_escalated_after_user_confirms(monkeypatch) -
     assert response.pending_action.payload["priority"] == "P3"
     assert response.pending_action.payload["kb_refs"] == []
     assert "CRM-1150" in response.pending_action.payload["description"]
+    assert sessions.get(session_id).decision == "draft_pending_approval"
+
+
+@pytest.mark.asyncio
+async def test_missing_context_and_evidence_are_persisted(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
+    workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    context_session_id = f"missing-context-test-{uuid.uuid4()}"
+    evidence_session_id = f"evidence-test-{uuid.uuid4()}"
+
+    context_response = await workflow.chat(context_session_id, "My VPN will not connect.", None)
+    evidence_response = await workflow.chat(
+        evidence_session_id,
+        "Software Center shows SWC-2001.",
+        "evidence@nakhla.example",
+    )
+
+    assert context_response.state == "awaiting_context"
+    assert sessions.get(context_session_id).decision == "missing_context"
+    assert evidence_response.state == "review_required"
+    assert sessions.get(evidence_session_id).decision == "evidence"
+
+
+@pytest.mark.asyncio
+async def test_active_incident_is_persisted(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", ActiveIncidentMcpClient)
+    workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    session_id = f"active-incident-test-{uuid.uuid4()}"
+
+    response = await workflow.chat(
+        session_id,
+        "My VPN shows NX-403.",
+        "incident@nakhla.example",
+    )
+
+    assert response.state == "active_incident"
+    assert sessions.get(session_id).decision == "active_incident"
 
 
 @pytest.mark.asyncio

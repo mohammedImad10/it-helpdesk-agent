@@ -21,6 +21,10 @@ async def approve(session_id: str, action_id: str, approved: bool) -> ChatRespon
         )
     if not approved:
         sessions.consume_action(action_id)
+        session = sessions.get(session_id)
+        session.awaiting = None
+        session.decision = "ticket_rejected"
+        sessions.save(session_id, session)
         return ChatResponse(
             session_id=session_id,
             reply="I will not create that ticket. Nothing was written to the helpdesk.",
@@ -31,6 +35,10 @@ async def approve(session_id: str, action_id: str, approved: bool) -> ChatRespon
     payload, trace = await client.create_ticket(stored.draft.model_dump(), action_id)
     if not payload.get("ok"):
         message = payload.get("error", {}).get("message", "The helpdesk ticket service was unavailable.")
+        session = sessions.get(session_id)
+        session.awaiting = "approval"
+        session.decision = "ticket_write_failed"
+        sessions.save(session_id, session)
         return ChatResponse(
             session_id=session_id,
             reply=f"The ticket was not created: {message} You can try approving this draft again.",
@@ -46,6 +54,10 @@ async def approve(session_id: str, action_id: str, approved: bool) -> ChatRespon
         f"Created {ticket_id} for {stored.draft.subject}.",
         ticket_id,
     )
+    session = sessions.get(session_id)
+    session.awaiting = None
+    session.decision = "ticket_created"
+    sessions.save(session_id, session)
     return ChatResponse(
         session_id=session_id,
         reply=f"Your ticket {ticket_id} was created. The assigned team will contact you.",
