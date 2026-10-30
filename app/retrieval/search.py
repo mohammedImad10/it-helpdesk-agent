@@ -63,11 +63,14 @@ class KnowledgeBase:
 
     @classmethod
     def load_or_build(cls) -> "KnowledgeBase":
+        provider = EmbeddingProvider.from_environment()
         if INDEX_PATH.exists():
             saved = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
             if isinstance(saved, dict) and saved.get("embedding_model") == EMBEDDING_MODEL:
-                return cls([Chunk(**item) for item in saved["chunks"]])
-        kb = cls.build()
+                kb = cls([Chunk(**item) for item in saved["chunks"]])
+                if provider is None or kb.has_embeddings:
+                    return kb
+        kb = cls.build(embedding_provider=provider)
         kb.persist()
         return kb
 

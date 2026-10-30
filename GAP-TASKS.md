@@ -5,7 +5,7 @@ the blocking items first, then rerun the verification commands in the relevant t
 
 ## Blocking requirements
 
-- [ ] **Make the LangGraph roles control the workflow**
+- [x] **Make the LangGraph roles control the workflow**
   - **Gap:** The Intake & Safety role can influence the topic, but the Resolution &
     Escalation decision is not used to select the user-visible result. Most outcomes
     are fixed branches in `app/workflow.py`.
@@ -15,7 +15,7 @@ the blocking items first, then rerun the verification commands in the relevant t
   - **Verify:** Add tests proving a resolution decision selects an answer,
     escalation, or ticket-draft path.
 
-- [ ] **Add real embedding-based retrieval**
+- [x] **Add real embedding-based retrieval**
   - **Gap:** Current retrieval is keyword and error-code matching only.
   - **Done when:** Ingestion creates embeddings through a real external API, stores
     vectors with chunk metadata, and retrieval combines exact error-code matching
@@ -23,7 +23,7 @@ the blocking items first, then rerun the verification commands in the relevant t
   - **Verify:** Re-ingest the KB and add cases where semantically equivalent wording
     retrieves the intended current source, including PDF-only content.
 
-- [ ] **Add structured application logging**
+- [x] **Add structured application logging**
   - **Gap:** Responses include `tool_calls`, but tool calls and failures are not
     emitted as readable application logs.
   - **Done when:** Every MCP call logs its tool name, success/failure, latency, and
@@ -55,7 +55,7 @@ the blocking items first, then rerun the verification commands in the relevant t
     include unknown action IDs, rejected drafts, ticket-service failures, and retry
     behavior.
 
-- [ ] **Exercise the unknown-issue escalation journey in the UI**
+- [x] **Exercise the unknown-issue escalation journey in the UI**
   - **Current behavior:** An unknown issue now offers escalation; a follow-up such
     as “Yes, please create a ticket” creates a `pending_action` and enables Approve.
   - **Done when:** The flow works in the running UI from unknown answer through
@@ -63,7 +63,7 @@ the blocking items first, then rerun the verification commands in the relevant t
   - **Verify:** Use the `CRM-1150` conversation, approve the draft, and confirm the
     real returned ticket appears in `/admin/tickets`.
 
-- [ ] **Run and preserve evaluation evidence**
+- [x] **Run and preserve evaluation evidence**
   - **Gap:** The scorecard claims 20/20, but it should be rerun after final changes.
   - **Done when:** Supplied and owned suites pass against the current app, with the
     updated scorecard committed and summarized in the README.
@@ -73,7 +73,7 @@ the blocking items first, then rerun the verification commands in the relevant t
     python simulator/evals/run_evals.py --cases evals/cases.owned.jsonl
     ```
 
-- [ ] **Add an owned eval for two-turn unknown escalation**
+- [x] **Add an owned eval for two-turn unknown escalation**
   - **Gap:** The regression is covered by unit test, but not yet by the shared eval
     format used by graders.
   - **Done when:** An eval starts with an unknown issue, confirms escalation in a

@@ -107,6 +107,32 @@ class HelpdeskWorkflow:
             tool_calls=traces,
         )
 
+    def _offer_escalation(
+        self,
+        session_id: str,
+        session: Any,
+        issue: Issue,
+        reported_message: str,
+        refs: list[str],
+        traces: list[ToolCall],
+        reply: str,
+        state: str = "escalation_offered",
+    ) -> ChatResponse:
+        session.issue = {
+            "code": issue.code,
+            "topic": issue.topic,
+            "reported_message": reported_message,
+            "kb_refs": refs,
+        }
+        self._save_decision(session_id, session, "escalation_choice", "escalation_confirmation")
+        return ChatResponse(
+            session_id=session_id,
+            reply=reply,
+            state=state,
+            citations=self._citation(*refs),
+            tool_calls=traces,
+        )
+
     def _draft(
         self,
         session_id: str,
@@ -339,6 +365,20 @@ class HelpdeskWorkflow:
             response.tool_calls = traces
             return response
 
+        resolution_mode = role_state["resolution"].mode
+        if resolution_mode == "escalate":
+            refs = source_ids[:1]
+            return self._offer_escalation(
+                session_id,
+                session,
+                issue,
+                reported_message,
+                refs,
+                traces,
+                "Based on the available evidence, escalation is the appropriate next step. "
+                "Would you like me to prepare an escalation ticket for your approval?",
+            )
+
         if issue.code == "NID-423":
             return self._documented_response(
                 session_id, session, issue, reported_message,
@@ -360,7 +400,7 @@ class HelpdeskWorkflow:
             )
 
         if issue.code == "NX-112":
-            if issue.asks_for_ticket:
+            if issue.asks_for_ticket and resolution_mode == "draft":
                 response = self._draft(
                     session_id, message, issue, employee, "network_access",
                     "P1" if issue.affected_users > 3 or employee["vip"] else "P2", ["KB-002"],
@@ -377,7 +417,7 @@ class HelpdeskWorkflow:
             )
 
         if issue.code == "NX-403":
-            if issue.asks_for_ticket:
+            if issue.asks_for_ticket and resolution_mode == "draft":
                 response = self._draft(
                     session_id, message, issue, employee, "network_access",
                     "P1" if issue.affected_users > 3 or employee["vip"] else "P2", ["KB-002"],
@@ -394,17 +434,29 @@ class HelpdeskWorkflow:
                 ["KB-002", "KB-007"], traces,
             )
 
-        if issue.topic == "software" and issue.asks_for_ticket:
+        if issue.topic == "software" and issue.asks_for_ticket and resolution_mode == "draft":
             response = self._draft(
                 session_id, message, issue, employee, "software",
                 "P1" if employee["vip"] else "P3", ["KB-009"],
             )
             response.tool_calls = traces
             return response
-        if issue.topic == "hardware" and issue.asks_for_ticket:
+        if issue.topic == "hardware" and issue.asks_for_ticket and resolution_mode == "draft":
             response = self._draft(
                 session_id, message, issue, employee, "hardware",
                 "P1" if employee["vip"] else "P3", ["KB-010"],
+            )
+            response.tool_calls = traces
+            return response
+        if issue.asks_for_ticket and resolution_mode == "draft":
+            response = self._draft(
+                session_id,
+                message,
+                issue,
+                employee,
+                self._escalation_category(issue),
+                "P1" if employee["vip"] else "P3",
+                [],
             )
             response.tool_calls = traces
             return response
@@ -421,10 +473,14 @@ class HelpdeskWorkflow:
                 citations=self._citation(str(selected.metadata["id"])),
                 tool_calls=traces,
             )
-        self._save_decision(session_id, session, "escalation_choice", "escalation_confirmation")
-        return ChatResponse(
-            session_id=session_id,
-            reply="The knowledge base has no documented fix for this issue. I will not invent troubleshooting steps; I can prepare an escalation ticket if you want.",
-            state="unknown_issue",
-            tool_calls=traces,
+        return self._offer_escalation(
+            session_id,
+            session,
+            issue,
+            reported_message,
+            [],
+            traces,
+            "The knowledge base has no documented fix for this issue. I will not invent troubleshooting steps; "
+            "I can prepare an escalation ticket if you want.",
+            "unknown_issue",
         )

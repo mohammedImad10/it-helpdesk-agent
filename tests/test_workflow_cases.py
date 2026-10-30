@@ -6,6 +6,7 @@ from app.approval import approve
 from app.models import ToolCall
 from app.retrieval.search import KnowledgeBase
 from app.services.sessions import sessions
+from app.services.llm import IntakeDecision, ResolutionDecision
 from app.workflow import HelpdeskWorkflow
 
 
@@ -59,6 +60,18 @@ class ActiveIncidentMcpClient(FakeMcpClient):
             },
             ToolCall(tool="get_service_status", ok=True, ms=1),
         )
+
+
+class FixedRoles:
+    def __init__(self, mode: str) -> None:
+        self.mode = mode
+
+    async def run(self, message, issue, source_ids, requester_memory=None):
+        return {
+            "intake": IntakeDecision(issue.topic, False, None),
+            "resolution": ResolutionDecision(self.mode, "test routing"),
+            "traces": [],
+        }
 
 
 @pytest.mark.asyncio
@@ -140,6 +153,39 @@ async def test_active_incident_is_persisted(monkeypatch) -> None:
 
     assert response.state == "active_incident"
     assert sessions.get(session_id).decision == "active_incident"
+
+
+@pytest.mark.asyncio
+async def test_resolution_mode_selects_answer_escalation_or_draft(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
+
+    answer_workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    answer_workflow.roles = FixedRoles("answer")
+    answer = await answer_workflow.chat(
+        f"resolution-answer-{uuid.uuid4()}",
+        "My VPN shows NX-403.",
+        "role-answer@nakhla.example",
+    )
+
+    escalation_workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    escalation_workflow.roles = FixedRoles("escalate")
+    escalation = await escalation_workflow.chat(
+        f"resolution-escalate-{uuid.uuid4()}",
+        "My VPN shows NX-403.",
+        "role-escalate@nakhla.example",
+    )
+
+    draft_workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    draft_workflow.roles = FixedRoles("draft")
+    draft = await draft_workflow.chat(
+        f"resolution-draft-{uuid.uuid4()}",
+        "My VPN shows NX-403. Please create a ticket.",
+        "role-draft@nakhla.example",
+    )
+
+    assert answer.state == "awaiting_follow_up"
+    assert escalation.state == "escalation_offered"
+    assert draft.pending_action is not None
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Any
@@ -10,6 +11,8 @@ from mcp.client.stdio import stdio_client
 
 from app.config import HELPDESK_MCP_ARGS, HELPDESK_MCP_COMMAND
 from app.models import ToolCall
+
+logger = logging.getLogger(__name__)
 
 
 class HelpdeskMcpClient:
@@ -34,7 +37,22 @@ class HelpdeskMcpClient:
         except Exception as exc:
             payload = {"ok": False, "error": {"code": "mcp_error", "message": str(exc)}}
         elapsed = round((time.perf_counter() - started) * 1000)
-        return payload, ToolCall(tool=tool, ok=bool(payload.get("ok")), ms=elapsed)
+        ok = bool(payload.get("ok"))
+        error = payload.get("error")
+        error_code = error.get("code") if isinstance(error, dict) else None
+        logger.info(
+            json.dumps(
+                {
+                    "event": "mcp_tool_call",
+                    "tool": tool,
+                    "ok": ok,
+                    "latency_ms": elapsed,
+                    "error_code": error_code,
+                },
+                sort_keys=True,
+            )
+        )
+        return payload, ToolCall(tool=tool, ok=ok, ms=elapsed)
 
     async def lookup_employee(self, email: str) -> tuple[dict[str, Any], ToolCall]:
         return await self.call("lookup_employee", {"email": email})

@@ -37,8 +37,9 @@ class HelpdeskRoles:
         return {"intake": decision, "traces": [trace]}
 
     async def _resolution(self, state: RoleState) -> dict:
+        fallback_mode = "draft" if state["issue"].asks_for_ticket else "answer"
         decision, trace = await self.llm.resolution(
-            state["message"], state["intake"].topic, state["source_ids"], "answer"
+            state["message"], state["intake"].topic, state["source_ids"], fallback_mode
         )
         return {"resolution": decision, "traces": state["traces"] + [trace]}
 

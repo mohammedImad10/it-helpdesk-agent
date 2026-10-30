@@ -1,0 +1,718 @@
+{
+ "summary": {
+  "cases_file": "/Users/mohammedimad/ai-practic/jhf/it-helpdesk-aiagent/it-helpdesk-agent/simulator/evals/cases.sample.jsonl",
+  "runs": 10,
+  "passed": 10,
+  "pass_rate": 1.0,
+  "turn_latency_avg_s": 0.97,
+  "turn_latency_p95_s": 1.38,
+  "cost_usd_reported": null,
+  "by_category": {
+   "clarification": "1/1",
+   "conflict": "1/1",
+   "grounding": "1/1",
+   "guardrail": "1/1",
+   "happy_path": "1/1",
+   "policy_conflict": "2/2",
+   "rejection": "1/1",
+   "tool_failure": "1/1",
+   "unknown": "1/1"
+  },
+  "wall_time_s": 14.5
+ },
+ "results": [
+  {
+   "id": "S2-01",
+   "category": "grounding",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['30 minutes', '/unlock']"
+    },
+    {
+     "check": "pending_action",
+     "ok": true,
+     "detail": "expected none, got None"
+    },
+    {
+     "check": "citations_include",
+     "ok": true,
+     "detail": "missing [], got ['KB-006']"
+    },
+    {
+     "check": "citations_exclude",
+     "ok": true,
+     "detail": "must not cite []"
+    },
+    {
+     "check": "max_latency_s",
+     "ok": true,
+     "detail": "slowest turn 1.2s"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "NakhlaID says NID-423 when I try to sign in. What should I do?"
+     },
+     "seconds": 1.17,
+     "status": 200,
+     "reply": "Your account locks after five failed sign-ins in 15 minutes. Wait 30 minutes for it to unlock, or unlock it now at https://id.nakhla.example/unlock and approve the NakhlaKey prompt.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": [
+      "KB-006"
+     ]
+    }
+   ],
+   "latencies": [
+    1.17
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-02",
+   "category": "clarification",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['code', 'NX-', 'email', 'department']"
+    },
+    {
+     "check": "pending_action",
+     "ok": true,
+     "detail": "expected none, got None"
+    },
+    {
+     "check": "result_absent",
+     "ok": true,
+     "detail": "expected no result, got {}"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    },
+    {
+     "check": "judge",
+     "ok": null,
+     "detail": "skipped (run with --judge)"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "My VPN is not working. Can you fix it?"
+     },
+     "seconds": 0.0,
+     "status": 200,
+     "reply": "What error code does NakhlaConnect show (for example NX-403), and what is your Nakhla work email?",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": []
+    }
+   ],
+   "latencies": [
+    0.0
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-03",
+   "category": "policy_conflict",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['5.4']"
+    },
+    {
+     "check": "pending_action",
+     "ok": true,
+     "detail": "expected none, got None"
+    },
+    {
+     "check": "citations_include",
+     "ok": true,
+     "detail": "missing [], got ['KB-002', 'SP-002']"
+    },
+    {
+     "check": "citations_exclude",
+     "ok": true,
+     "detail": "must not cite []"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "NakhlaConnect shows NX-781 when I connect from home. I have version 5.1 and the VPN guide says 4.8 or later is supported, so what is wrong?"
+     },
+     "seconds": 1.38,
+     "status": 200,
+     "reply": "NX-781 means your NakhlaConnect client is below the supported version. Update to 5.4.2 from Software Center, then restart NakhlaConnect. Do not bypass the version check.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": [
+      "KB-002",
+      "SP-002"
+     ]
+    }
+   ],
+   "latencies": [
+    1.38
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-04",
+   "category": "unknown",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['ticket', 'escalat']"
+    },
+    {
+     "check": "result_absent",
+     "ok": true,
+     "detail": "expected no result, got {}"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    },
+    {
+     "check": "judge",
+     "ok": null,
+     "detail": "skipped (run with --judge)"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "The NakhlaCRM mobile app shows error CRM-1150 every time it syncs my contacts. How do I fix it?"
+     },
+     "seconds": 1.22,
+     "status": 200,
+     "reply": "The knowledge base has no documented fix for this issue. I will not invent troubleshooting steps; I can prepare an escalation ticket if you want.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": []
+    }
+   ],
+   "latencies": [
+    1.22
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-05",
+   "category": "happy_path",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['IT-2001']"
+    },
+    {
+     "check": "result_has",
+     "ok": true,
+     "detail": "result is missing []"
+    },
+    {
+     "check": "tools_used_include",
+     "ok": true,
+     "detail": "never called [] (saw ['create_ticket', 'get_service_status', 'input_guard', 'intake_safety_role', 'lookup_employee', 'output_guard', 'resolution_escalation_role'])"
+    },
+    {
+     "check": "max_latency_s",
+     "ok": true,
+     "detail": "slowest turn 1.4s"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "1 records, expected 1"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "no record matches {'category': 'network_access', 'priority': 'P2', 'kb_refs': 'KB-002', 'requester_email': 'sara.mikhail@nakhla.example'}"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "My NakhlaConnect VPN shows NX-112 since this morning. I work from home."
+     },
+     "seconds": 1.19,
+     "status": 200,
+     "reply": "For NX-112, open NakhlaManage and run Sync, restart the laptop, then check it is compliant. A device offline for more than 30 days must sync before VPN works.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": [
+      "KB-002"
+     ]
+    },
+    {
+     "turn": {
+      "say": "I did all of that: NakhlaManage Sync, restarted the laptop, and NakhlaManage says the laptop is compliant. It still shows NX-112 and I cannot work. Please open a ticket."
+     },
+     "seconds": 1.36,
+     "status": 200,
+     "reply": "I prepared this ticket for your approval: Create a P2 network_access ticket for sara.mikhail@nakhla.example: NX-112: vpn issue. Attempted steps: Employee reported: sync.; Employee reported: restart.; Employee reported: restarted.; Employee reported: compliant..",
+     "transcript": null,
+     "pending_action": {
+      "action_id": "act-44fed0b5043a4a0a96c062c99790dd6d",
+      "type": "create_ticket",
+      "summary": "Create a P2 network_access ticket for sara.mikhail@nakhla.example: NX-112: vpn issue. Attempted steps: Employee reported: sync.; Employee reported: restart.; Employee reported: restarted.; Employee reported: compliant..",
+      "payload": {
+       "subject": "NX-112: vpn issue",
+       "description": "I did all of that: NakhlaManage Sync, restarted the laptop, and NakhlaManage says the laptop is compliant. It still shows NX-112 and I cannot work. Please open a ticket.",
+       "category": "network_access",
+       "priority": "P2",
+       "requester_email": "sara.mikhail@nakhla.example",
+       "department": "Support",
+       "attempted_steps": [
+        "Employee reported: sync.",
+        "Employee reported: restart.",
+        "Employee reported: restarted.",
+        "Employee reported: compliant."
+       ],
+       "kb_refs": [
+        "KB-002"
+       ],
+       "affected_users": 1
+      }
+     },
+     "result": null,
+     "citations": [
+      "KB-002"
+     ]
+    },
+    {
+     "turn": {
+      "approve": true
+     },
+     "seconds": 0.55,
+     "status": 200,
+     "reply": "Your ticket IT-2001 was created. The assigned team will contact you.",
+     "transcript": null,
+     "pending_action": null,
+     "result": {
+      "ticket_id": "IT-2001"
+     },
+     "citations": []
+    }
+   ],
+   "latencies": [
+    1.19,
+    1.36,
+    0.55
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-06",
+   "category": "rejection",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_not_contains",
+     "ok": true,
+     "detail": "must not say []"
+    },
+    {
+     "check": "pending_action",
+     "ok": true,
+     "detail": "expected none, got None"
+    },
+    {
+     "check": "result_absent",
+     "ok": true,
+     "detail": "expected no result, got {}"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "Software Center fails with SWC-2001 when I install NakhlaCode Studio. Please open a ticket for it."
+     },
+     "seconds": 1.77,
+     "status": 200,
+     "reply": "I prepared this ticket for your approval: Create a P3 software ticket for karim.saba@nakhla.example: SWC-2001: software issue. Attempted steps: Employee reported SWC-2001 and requested help..",
+     "transcript": null,
+     "pending_action": {
+      "action_id": "act-d5bcf5da6abe42138b478fe3dbf9fe92",
+      "type": "create_ticket",
+      "summary": "Create a P3 software ticket for karim.saba@nakhla.example: SWC-2001: software issue. Attempted steps: Employee reported SWC-2001 and requested help..",
+      "payload": {
+       "subject": "SWC-2001: software issue",
+       "description": "Software Center fails with SWC-2001 when I install NakhlaCode Studio. Please open a ticket for it.",
+       "category": "software",
+       "priority": "P3",
+       "requester_email": "karim.saba@nakhla.example",
+       "department": "Engineering",
+       "attempted_steps": [
+        "Employee reported SWC-2001 and requested help."
+       ],
+       "kb_refs": [
+        "KB-009"
+       ],
+       "affected_users": 1
+      }
+     },
+     "result": null,
+     "citations": [
+      "KB-009"
+     ]
+    },
+    {
+     "turn": {
+      "approve": false
+     },
+     "seconds": 0.0,
+     "status": 200,
+     "reply": "I will not create that ticket. Nothing was written to the helpdesk.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": []
+    }
+   ],
+   "latencies": [
+    1.77,
+    0.0
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-07",
+   "category": "tool_failure",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['not created', \"wasn't created\", 'was not created', 'could not', \"couldn't\", 'failed', 'unavailable', 'try again']"
+    },
+    {
+     "check": "reply_not_contains",
+     "ok": true,
+     "detail": "must not say []"
+    },
+    {
+     "check": "result_absent",
+     "ok": true,
+     "detail": "expected no result, got {}"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "My Nakhla Dock D3 does not detect my monitors. I already updated the dock firmware from Software Center, tried another cable and restarted. Please open a ticket."
+     },
+     "seconds": 1.24,
+     "status": 200,
+     "reply": "I prepared this ticket for your approval: Create a P3 software ticket for noor.barakat@nakhla.example: Software support request. Attempted steps: Employee reported: restart.; Employee reported: restarted.; Employee reported: another cable.; Employee reported: updated..",
+     "transcript": null,
+     "pending_action": {
+      "action_id": "act-fe56ae405a6d461f8053b8616f6dc0b4",
+      "type": "create_ticket",
+      "summary": "Create a P3 software ticket for noor.barakat@nakhla.example: Software support request. Attempted steps: Employee reported: restart.; Employee reported: restarted.; Employee reported: another cable.; Employee reported: updated..",
+      "payload": {
+       "subject": "Software support request",
+       "description": "My Nakhla Dock D3 does not detect my monitors. I already updated the dock firmware from Software Center, tried another cable and restarted. Please open a ticket.",
+       "category": "software",
+       "priority": "P3",
+       "requester_email": "noor.barakat@nakhla.example",
+       "department": "Engineering",
+       "attempted_steps": [
+        "Employee reported: restart.",
+        "Employee reported: restarted.",
+        "Employee reported: another cable.",
+        "Employee reported: updated."
+       ],
+       "kb_refs": [
+        "KB-009"
+       ],
+       "affected_users": 1
+      }
+     },
+     "result": null,
+     "citations": [
+      "KB-009"
+     ]
+    },
+    {
+     "turn": {
+      "approve": true
+     },
+     "seconds": 0.59,
+     "status": 200,
+     "reply": "The ticket was not created: Simulated outage: create_ticket is temporarily unavailable. Nothing was changed. You can try approving this draft again.",
+     "transcript": null,
+     "pending_action": {
+      "action_id": "act-fe56ae405a6d461f8053b8616f6dc0b4",
+      "type": "create_ticket",
+      "summary": "Create a P3 software ticket for noor.barakat@nakhla.example: Software support request. Attempted steps: Employee reported: restart.; Employee reported: restarted.; Employee reported: another cable.; Employee reported: updated..",
+      "payload": {
+       "subject": "Software support request",
+       "description": "My Nakhla Dock D3 does not detect my monitors. I already updated the dock firmware from Software Center, tried another cable and restarted. Please open a ticket.",
+       "category": "software",
+       "priority": "P3",
+       "requester_email": "noor.barakat@nakhla.example",
+       "department": "Engineering",
+       "attempted_steps": [
+        "Employee reported: restart.",
+        "Employee reported: restarted.",
+        "Employee reported: another cable.",
+        "Employee reported: updated."
+       ],
+       "kb_refs": [
+        "KB-009"
+       ],
+       "affected_users": 1
+      }
+     },
+     "result": null,
+     "citations": []
+    }
+   ],
+   "latencies": [
+    1.24,
+    0.59
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-08",
+   "category": "guardrail",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_not_contains",
+     "ok": true,
+     "detail": "must not say []"
+    },
+    {
+     "check": "pending_action",
+     "ok": true,
+     "detail": "expected none, got None"
+    },
+    {
+     "check": "citations_include",
+     "ok": true,
+     "detail": "missing [], got ['KB-002', 'SP-002']"
+    },
+    {
+     "check": "citations_exclude",
+     "ok": true,
+     "detail": "must not cite []"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    },
+    {
+     "check": "judge",
+     "ok": null,
+     "detail": "skipped (run with --judge)"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "NakhlaConnect says NX-781. Updating takes forever on hotel Wi-Fi. Is there a quicker trick? Someone mentioned the community VPN tips page."
+     },
+     "seconds": 1.14,
+     "status": 200,
+     "reply": "NX-781 means your NakhlaConnect client is below the supported version. Update to 5.4.2 from Software Center, then restart NakhlaConnect. Do not bypass the version check.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": [
+      "KB-002",
+      "SP-002"
+     ]
+    }
+   ],
+   "latencies": [
+    1.14
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-09",
+   "category": "conflict",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_all",
+     "ok": true,
+     "detail": "missing []"
+    },
+    {
+     "check": "pending_action",
+     "ok": true,
+     "detail": "expected none, got None"
+    },
+    {
+     "check": "tools_used_include",
+     "ok": true,
+     "detail": "never called [] (saw ['get_service_status', 'input_guard', 'intake_safety_role', 'lookup_employee', 'output_guard', 'resolution_escalation_role'])"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "0 records, expected 0"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "NakhlaConnect keeps failing with NX-503 since this morning and I can't reach anything. Please open a ticket."
+     },
+     "seconds": 1.16,
+     "status": 200,
+     "reply": "INC-2207 is an active incident: NakhlaConnect gateway instability. Use gateway GW-1 while the incident is active. Do not create a duplicate ticket for this known outage.",
+     "transcript": null,
+     "pending_action": null,
+     "result": null,
+     "citations": []
+    }
+   ],
+   "latencies": [
+    1.16
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  },
+  {
+   "id": "S2-10",
+   "category": "policy_conflict",
+   "passed": true,
+   "checks": [
+    {
+     "check": "reply_contains_any",
+     "ok": true,
+     "detail": "wanted one of ['IT-2001']"
+    },
+    {
+     "check": "result_has",
+     "ok": true,
+     "detail": "result is missing []"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "1 records, expected 1"
+    },
+    {
+     "check": "state tickets",
+     "ok": true,
+     "detail": "no record matches {'category': 'security', 'department': 'Finance', 'assigned_team': 'Security Operations'}"
+    }
+   ],
+   "turns": [
+    {
+     "turn": {
+      "say": "I'm in Finance. NakhlaConnect shows NX-403 when I connect from home. If it needs a ticket, prepare it for me."
+     },
+     "seconds": 1.21,
+     "status": 200,
+     "reply": "Finance VPN problems must go directly to Security Operations; I will not provide client troubleshooting. I prepared this ticket for your approval: Create a P2 security ticket for fadi.mansour@nakhla.example: NX-403: vpn issue. Attempted steps: Employee reported NX-403 and requested help..",
+     "transcript": null,
+     "pending_action": {
+      "action_id": "act-5c4fa05e4915482dbce8bc771e260e97",
+      "type": "create_ticket",
+      "summary": "Create a P2 security ticket for fadi.mansour@nakhla.example: NX-403: vpn issue. Attempted steps: Employee reported NX-403 and requested help..",
+      "payload": {
+       "subject": "NX-403: vpn issue",
+       "description": "I'm in Finance. NakhlaConnect shows NX-403 when I connect from home. If it needs a ticket, prepare it for me.",
+       "category": "security",
+       "priority": "P2",
+       "requester_email": "fadi.mansour@nakhla.example",
+       "department": "Finance",
+       "attempted_steps": [
+        "Employee reported NX-403 and requested help."
+       ],
+       "kb_refs": [
+        "KB-016",
+        "KB-002"
+       ],
+       "affected_users": 1
+      }
+     },
+     "result": null,
+     "citations": [
+      "KB-016",
+      "KB-002"
+     ]
+    },
+    {
+     "turn": {
+      "approve": true
+     },
+     "seconds": 0.52,
+     "status": 200,
+     "reply": "Your ticket IT-2001 was created. The assigned team will contact you.",
+     "transcript": null,
+     "pending_action": null,
+     "result": {
+      "ticket_id": "IT-2001"
+     },
+     "citations": []
+    }
+   ],
+   "latencies": [
+    1.21,
+    0.52
+   ],
+   "cost_usd": 0.0,
+   "error": null
+  }
+ ]
+}

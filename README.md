@@ -5,7 +5,7 @@
 Nakhla Systems employees get policy-safe IT help from current company knowledge, with citations
 for troubleshooting and a ticket created only after they approve its exact draft.
 
-▶ **3-minute demo video:** _Record and add your link before submission_ · 🧪 **Eval pass rate:** 20/20 · 🧰 **Stack:** LangGraph · OpenRouter · MCP · FastAPI · SQLite · Docker Compose
+▶ **3-minute demo video:** _Record and add your link before submission_ · 🧪 **Eval pass rate:** 21/21 · 🧰 **Stack:** LangGraph · OpenRouter · MCP · FastAPI · SQLite · Docker Compose
 
 For a component-by-component explanation and workflow diagrams, see the
 [implementation guide](docs/IMPLEMENTATION.md).
@@ -77,11 +77,14 @@ actions, and API failures never claim a successful ticket ID.
 
 | Suite | Passed | Latency |
 |---|---:|---|
-| Supplied Scenario 2 cases | 10/10 | 1.06 s average, 1.48 s p95 |
-| Project-owned cases (`evals/cases.owned.jsonl`) | 10/10 | 0.96 s average, 1.32 s p95 |
+| Supplied Scenario 2 cases | 10/10 | 0.97 s average, 1.38 s p95 |
+| Project-owned cases (`evals/cases.owned.jsonl`) | 11/11 | 0.88 s average, 1.23 s p95 |
 
 The owned suite covers injection, persistent memory, contractor/Finance/Executive rules,
-PDF-only grounding, duplicate approval, active incidents, unknown issues, and ticket failures.
+PDF-only grounding, duplicate approval, active incidents, unknown issues, ticket failures, and
+the two-turn CRM-1150 escalation through approval. Detailed per-case evidence is preserved in
+[`evals/scorecard.supplied.md`](evals/scorecard.supplied.md) and
+[`evals/scorecard.owned.md`](evals/scorecard.owned.md).
 
 **The failure we fixed:** an `NX-403` request initially produced a generic
 `review_required` reply instead of the documented KB-002 procedure. The workflow now returns
