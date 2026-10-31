@@ -1,7 +1,3 @@
-import json
-from dataclasses import asdict
-
-from app.config import EMBEDDING_MODEL
 from app.retrieval.search import Chunk, KnowledgeBase
 
 
@@ -66,17 +62,8 @@ def test_load_or_build_reembeds_a_keyword_only_index_when_provider_is_available(
     monkeypatch, tmp_path
 ) -> None:
     provider = SemanticPdfProvider()
-    index_path = tmp_path / "kb_index.json"
-    index_path.write_text(
-        json.dumps(
-            {
-                "embedding_model": EMBEDDING_MODEL,
-                "chunks": [asdict(Chunk("keyword-only", current_metadata("KB-999"), "kb-999.md"))],
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("app.retrieval.search.INDEX_PATH", index_path)
+    monkeypatch.setattr("app.retrieval.search.VECTOR_DB_PATH", tmp_path / "chroma")
+    KnowledgeBase([Chunk("keyword-only", current_metadata("KB-999"), "kb-999.md")]).persist()
     monkeypatch.setattr(
         "app.retrieval.search.EmbeddingProvider.from_environment", lambda: provider
     )

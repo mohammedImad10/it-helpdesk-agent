@@ -13,24 +13,28 @@ helpdesk ticket only after approving its exact draft.
 
 ![Architecture](docs/architecture.svg)
 
-The Gradio UI calls the FastAPI contract. A LangGraph workflow runs Intake & Safety, then
-Resolution & Escalation, while Python enforces retrieval precedence and approval rules. Read tools
-and the final approved write travel over stdio MCP to the simulated Helpdesk API. SQLite stores
-sessions, pending actions, and requester memory.
+The Gradio UI calls only the FastAPI contract. A chat request is screened before it restores
+SQLite state, reads employee and status data through MCP, retrieves current KB evidence from
+Chroma using exact error-code and semantic-vector ranking, then runs Intake & Safety followed by Resolution &
+Escalation. Python remains the authority for precedence, policy, citations, and approval. The
+separate `/api/approve` path loads the stored draft and is the only path that can send an approved
+MCP write to the simulated Helpdesk API.
 
 ## 3. Roles
 
 | Role | Its one job | Tools it may call | Done when |
 |---|---|---|---|
 | Intake & Safety | Extract intent, reject injection/out-of-scope requests, identify one missing fact | Read-only employee/status context supplied by orchestration | The workflow has safe, sufficient context |
-| Resolution & Escalation | Select a cited answer or propose a validated ticket draft | Current selected KB context only; no write tools | Every step has eligible evidence or escalation is offered |
+| Resolution & Escalation | Select an answer, escalation offer, or draft route | Current selected KB context only; no write tools | Its mode changes safe response routing while Python validates the result |
 
 `create_ticket` is called by application code in `/api/approve`, never by an LLM. **Agreed.**
 
 ## 4. State
 
-Each session stores `email`, current issue code/topic, awaiting field, and pending actions. State
-lives in SQLite and is restored after an application restart.
+Each session stores `email`, current issue code/topic, `awaiting` input, an explicit `decision`
+state, and pending actions. Decision states cover missing context, evidence, active incident,
+worked confirmation, escalation choice, draft pending approval, rejection, write failure, and
+confirmed ticket creation. State lives in SQLite and is restored after an application restart.
 
 ## 5. Persistent memory
 

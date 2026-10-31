@@ -180,7 +180,7 @@ flowchart LR
     PDF[2 PDF documents] --> Extract[PyMuPDF text extraction]
     Extract --> Parse
     Parse --> Sections[Section-aware chunks]
-    Sections --> Index[(data/kb_index.json)]
+    Sections --> Index[(Chroma: data/chroma)]
 ```
 
 Each persisted chunk keeps:
@@ -196,10 +196,11 @@ Each persisted chunk keeps:
 - Source path
 
 In deployed mode, ingestion sends each section to OpenRouter
-`openai/text-embedding-3-small` and persists the resulting vectors in `data/kb_index.json`.
-At query time, the agent embeds the request and calculates cosine similarity. Search ranks exact
-error-code matches first, semantic similarity second, and relevant keyword matches third. When no
-OpenRouter key is configured, it explicitly uses the deterministic error-code/keyword fallback.
+`openai/text-embedding-3-small` and persists the documents, vectors, and source metadata in the
+local Chroma collection at `data/chroma`. At query time, Chroma returns cosine-distance matches
+for the embedded request. Search ranks exact error-code matches first, semantic similarity second,
+and relevant keyword matches third. When no OpenRouter key is configured, it explicitly uses the
+deterministic error-code/keyword fallback.
 The retrieval layer filters and ranks sources in deterministic Python:
 
 1. Exclude every non-`current` document.

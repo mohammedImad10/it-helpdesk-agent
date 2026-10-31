@@ -15,7 +15,7 @@ KIT_ROOT = SIMULATOR_ROOT if SIMULATOR_ROOT.is_dir() else (
 )
 DATASET_ROOT = KIT_ROOT / "dataset"
 KB_ROOT = DATASET_ROOT / "knowledge_base"
-INDEX_PATH = PROJECT_ROOT / "data" / "kb_index.json"
+VECTOR_DB_PATH = PROJECT_ROOT / "data" / "chroma"
 MEMORY_PATH = PROJECT_ROOT / "data" / "helpdesk.sqlite3"
 
 HELPDESK_MCP_COMMAND = sys.executable

@@ -24,13 +24,14 @@ For a component-by-component explanation and workflow diagrams, see the
 - **Intake & Safety:** uses OpenRouter to extract intent and identify missing context; Python input guards block secret and override attempts before tool access.
 - **Resolution & Escalation:** uses OpenRouter with current selected sources; deterministic code verifies precedence and citations.
 - **MCP + simulator:** employee directory, status, and tickets are reached only through the supplied stdio MCP server.
-- **SQLite memory:** persists conversation state, pending actions, and requester ticket context.
+- **SQLite memory:** persists conversation state, explicit decision points, pending actions, and requester ticket context.
 - **Approval gate:** the LLM roles never receive write tools; `/api/approve` calls `create_ticket` with the stored payload and `action_id` idempotency key.
+- **Structured tool observability:** every MCP call records a sanitized JSON log with tool name, outcome, latency, and error code.
 
 | Component | Real or simulated? | Notes |
 |---|---|---|
 | OpenRouter chat model | **Real** | `openai/gpt-4.1-mini`; requires your `OPENROUTER_API_KEY` |
-| OpenRouter embeddings | **Real** | `openai/text-embedding-3-small` powers persisted semantic vectors and cosine ranking |
+| OpenRouter embeddings + Chroma | **Real + local** | `openai/text-embedding-3-small` vectors persist in Chroma for semantic ranking |
 | Nakhla Helpdesk API and MCP server | **Simulated** | Bootcamp-supplied REST API + stdio MCP with fault injection |
 | Nakhla knowledge base and ticket archive | **Simulated** | Bootcamp-supplied fictional training data |
 | SQLite memory | **Local** | Persisted Docker volume / local `data/` directory |

@@ -11,7 +11,7 @@ from app.retrieval.search import KnowledgeBase
 if __name__ == "__main__":
     kb = KnowledgeBase.build()
     kb.persist()
-    mode = "OpenRouter semantic vectors" if kb.has_embeddings else "keyword/error-code fallback"
+    mode = "Chroma with OpenRouter semantic vectors" if kb.has_embeddings else "Chroma keyword/error-code fallback"
     print(
         f"Indexed {len({chunk.metadata['id'] for chunk in kb.chunks})} documents in "
         f"{len(kb.chunks)} sections using {mode}."
