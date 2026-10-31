@@ -71,3 +71,49 @@ retrieved document is untrusted.
 
 The LLM roles cannot call MCP tools, create tickets, bypass source precedence, invent citations,
 or approve a write.
+
+## Repository file structure
+
+```text
+it-helpdesk-agent/
+├── app/
+│   ├── main.py                 # FastAPI entry point: /api/chat and /api/approve
+│   ├── workflow.py             # Main chat orchestration and policy branches
+│   ├── agent_graph.py          # Two-role LangGraph definition
+│   ├── approval.py             # Approval-only ticket write path
+│   ├── guardrails.py           # Input and output safety validation
+│   ├── mcp_client.py           # Controlled MCP client and structured logs
+│   ├── triage.py               # Error-code, intent, and ticket-query recognition
+│   ├── citations.py            # Current-source citation construction
+│   ├── models.py               # Pydantic request, response, and TicketDraft contracts
+│   ├── config.py               # Paths and environment configuration
+│   ├── retrieval/
+│   │   ├── search.py           # KB parsing, Chroma persistence, and search
+│   │   ├── embeddings.py       # OpenRouter embedding provider
+│   │   └── precedence.py       # Source conflict and precedence ordering
+│   └── services/
+│       ├── sessions.py         # SQLite session, draft, and requester memory store
+│       └── llm.py              # OpenRouter role decisions and safe fallback
+├── ui/
+│   └── app_ui.py               # Project-owned Gradio entry point
+├── scripts/
+│   └── ingest_kb.py            # Rebuilds the persistent Chroma collection
+├── simulator/
+│   ├── services/               # Supplied Helpdesk API and MCP server
+│   └── dataset/                # Employee, ticket, and KB source data
+├── evals/
+│   ├── cases.owned.jsonl       # Project-owned evaluation scenarios
+│   └── scorecard.*             # Preserved evaluation evidence
+├── tests/                      # Unit and workflow regression tests
+├── docs/
+│   ├── ARCHITECTURE.md         # This overview
+│   ├── architecture-overview.svg # Rendered overview diagram
+│   ├── IMPLEMENTATION.md       # Detailed implementation guide
+│   └── demo-checklist.md       # Demo preparation guide
+├── data/
+│   ├── chroma/                 # Persistent Chroma collection at runtime
+│   └── helpdesk.sqlite3        # Persistent SQLite state at runtime
+├── docker-compose.yml          # UI, app, and simulator stack
+├── requirements.txt            # Python dependencies
+└── README.md                   # Setup, run instructions, and project overview
+```
