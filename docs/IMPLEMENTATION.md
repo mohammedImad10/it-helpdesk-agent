@@ -19,26 +19,46 @@ The agent helps fictional Nakhla Systems employees with IT issues. It:
 
 ```mermaid
 flowchart LR
-    U[Employee] --> UI[Gradio UI :7860]
-    UI --> API[FastAPI :8000]
+    Employee[Employee] --> UI[Gradio UI<br/>:7860]
+    UI -->|POST /api/chat| API[FastAPI agent<br/>:8000]
+    UI -->|POST /api/approve| API
 
-    subgraph Agent[Helpdesk Agent]
-        API --> IG[Input guard]
-        IG --> G[LangGraph workflow]
-        G --> IR[Intake & Safety role]
-        IR --> RR[Resolution & Escalation role]
-        RR --> P[Deterministic policy engine]
-        P --> R[Hybrid KB retrieval]
-        P --> OG[Output + citation guard]
-        API <--> M[(SQLite memory)]
+    subgraph Agent[Helpdesk Agent application]
+        API --> InputGuard[Input guard]
+        InputGuard --> Session[Load and persist session state]
+        Session <--> SQLite[(SQLite<br/>sessions, actions, memory)]
+
+        InputGuard --> Workflow[Python workflow and policy controls]
+        Workflow --> Retrieval[Retrieval and precedence]
+        Retrieval <--> Chroma[(Chroma<br/>helpdesk_kb collection)]
+        KB[20 controlled KB documents<br/>18 Markdown + 2 PDF] --> Ingest[Ingestion]
+        Ingest --> Chroma
+
+        Workflow --> Graph[LangGraph]
+        Graph --> Intake[Intake and Safety role]
+        Intake --> Resolution[Resolution and Escalation role]
+        Resolution --> Policy[Deterministic policy and draft builder]
+        Graph <-. optional structured role calls .-> OpenRouter[OpenRouter]
+
+        API --> Approval[Approval-only ticket write]
+        Approval --> StoredDraft[Server-stored TicketDraft]
+        StoredDraft <--> SQLite
+        Policy --> StoredDraft
+
+        Policy --> OutputGuard[Output and citation guard]
+        Approval --> OutputGuard
     end
 
-    R --> KB[(20-document KB)]
-    G --> MCP[stdio MCP client]
+    Workflow --> MCP[stdio MCP client]
+    Approval -->|create_ticket only after approval| MCP
     MCP --> MCPServer[Helpdesk MCP server]
-    MCPServer --> Helpdesk[Simulated Helpdesk API :8102]
-    OG --> UI
+    MCPServer --> Helpdesk[Simulated Helpdesk API<br/>:8102]
+    OutputGuard --> UI
 ```
+
+The read-only MCP tools (`lookup_employee`, `get_service_status`, `get_ticket`, and
+`search_tickets`) are called only from Python workflow code. `create_ticket` is the only write
+tool used by the app and is reachable only from the approval path with a server-stored draft.
 
 ### Real and simulated components
 

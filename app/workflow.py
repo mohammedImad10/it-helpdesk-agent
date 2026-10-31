@@ -11,7 +11,7 @@ from app.mcp_client import HelpdeskMcpClient
 from app.models import ChatResponse, Citation, PendingAction, TicketDraft, ToolCall
 from app.retrieval.search import KnowledgeBase
 from app.services.sessions import StoredAction, sessions
-from app.triage import Issue, extract_issue, extract_ticket_status_id
+from app.triage import Issue, extract_issue, extract_ticket_status_id, requests_open_ticket_history
 
 
 class HelpdeskWorkflow:
@@ -203,6 +203,60 @@ class HelpdeskWorkflow:
                 state="await_confirmation",
                 pending_action=pending,
                 tool_calls=[guard_trace],
+            )
+        if requests_open_ticket_history(message):
+            if not session.email:
+                self._save_decision(session_id, session, "missing_context", "email")
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="Please provide your Nakhla work email so I can check your open tickets.",
+                    state="awaiting_context",
+                    tool_calls=[guard_trace],
+                )
+            client = HelpdeskMcpClient()
+            employee_result, employee_trace = await client.lookup_employee(session.email)
+            traces = [guard_trace, employee_trace]
+            if not employee_result.get("ok"):
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I could not verify your employee details, so I cannot safely check ticket history.",
+                    state="awaiting_context",
+                    tool_calls=traces,
+                )
+            employee = employee_result["employee"]
+            ticket_result, ticket_trace = await client.search_tickets(employee["email"], "open")
+            traces.append(ticket_trace)
+            if not ticket_result.get("ok"):
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I could not retrieve your open tickets from the helpdesk.",
+                    state="ticket_history_unavailable",
+                    tool_calls=traces,
+                )
+            tickets = [
+                ticket
+                for ticket in ticket_result.get("tickets", [])
+                if ticket.get("requester_email", "").lower() == employee["email"].lower()
+            ]
+            ticket_ids = [
+                str(ticket["ticket_id"])
+                for ticket in tickets
+                if isinstance(ticket.get("ticket_id"), str) and ticket["ticket_id"].startswith("IT-")
+            ]
+            if not ticket_ids:
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="You do not have any open tickets.",
+                    state="ticket_history",
+                    result={"ticket_ids": []},
+                    tool_calls=traces,
+                )
+            return ChatResponse(
+                session_id=session_id,
+                reply=f"Your open tickets are: {', '.join(ticket_ids)}.",
+                state="ticket_history",
+                result={"ticket_ids": ticket_ids},
+                tool_calls=traces,
             )
         ticket_status_id = extract_ticket_status_id(message)
         if ticket_status_id:

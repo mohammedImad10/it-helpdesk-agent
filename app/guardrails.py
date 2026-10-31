@@ -42,8 +42,12 @@ def enforce_output(response: ChatResponse, kb: KnowledgeBase) -> ChatResponse:
         response.reply = "I could not verify the selected knowledge-base sources, so I will not provide unsupported guidance."
         response.state = "safety_check_failed"
     ticket_ids = set(re.findall(r"\bIT-\d{4}\b", response.reply))
-    confirmed_id = (response.result or {}).get("ticket_id")
-    if ticket_ids and confirmed_id not in ticket_ids:
+    result = response.result or {}
+    confirmed_ids = {result["ticket_id"]} if isinstance(result.get("ticket_id"), str) else set()
+    confirmed_ids.update(
+        ticket_id for ticket_id in result.get("ticket_ids", []) if isinstance(ticket_id, str)
+    )
+    if ticket_ids and not ticket_ids.issubset(confirmed_ids):
         response.reply = "I cannot confirm a ticket ID until the helpdesk system returns it."
         response.result = None
         response.state = "safety_check_failed"

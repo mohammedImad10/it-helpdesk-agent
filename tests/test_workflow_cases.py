@@ -45,6 +45,26 @@ class FakeMcpClient:
             ToolCall(tool="get_ticket", ok=True, ms=1),
         )
 
+    async def search_tickets(self, requester_email: str, status: str, limit: int = 5):
+        return (
+            {
+                "ok": True,
+                "tickets": [
+                    {
+                        "ticket_id": "IT-2001",
+                        "requester_email": requester_email,
+                        "status": status,
+                    },
+                    {
+                        "ticket_id": "IT-2002",
+                        "requester_email": requester_email,
+                        "status": status,
+                    },
+                ],
+            },
+            ToolCall(tool="search_tickets", ok=True, ms=1),
+        )
+
     async def create_ticket(self, draft: dict, idempotency_key: str):
         type(self).create_calls += 1
         return (
@@ -123,6 +143,29 @@ async def test_ticket_status_uses_verified_helpdesk_record(monkeypatch) -> None:
         "input_guard",
         "lookup_employee",
         "get_ticket",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_open_ticket_history_bypasses_worked_follow_up(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
+    workflow = HelpdeskWorkflow(KnowledgeBase.build())
+    session_id = f"ticket-history-{uuid.uuid4()}"
+    await workflow.chat(
+        session_id,
+        "NakhlaConnect shows NX-781 when I connect from home.",
+        "tariq.hamdan@nakhla.example",
+    )
+
+    response = await workflow.chat(session_id, "What are my open tickets?", None)
+
+    assert response.reply == "Your open tickets are: IT-2001, IT-2002."
+    assert response.state == "ticket_history"
+    assert response.result == {"ticket_ids": ["IT-2001", "IT-2002"]}
+    assert [trace.tool for trace in response.tool_calls] == [
+        "input_guard",
+        "lookup_employee",
+        "search_tickets",
     ]
 
 

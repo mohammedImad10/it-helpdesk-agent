@@ -483,8 +483,18 @@ flowchart TD
     SaveEmail --> ApprovalPending{awaiting = approval?}
 
     ApprovalPending -->|Yes| ExistingDraft[await_confirmation<br/>Return the existing stored draft only]
-    ApprovalPending -->|No| TicketStatus{Status question contains IT-####?}
+    ApprovalPending -->|No| TicketHistory{Open-ticket history question?}
 
+    TicketHistory -->|Yes| HistoryEmail{Verified email available?}
+    HistoryEmail -->|No| HistoryNeedsEmail[awaiting_context<br/>Ask for work email]
+    HistoryEmail -->|Yes| HistoryEmployee[MCP lookup_employee]
+    HistoryEmployee -->|Lookup failed| HistoryEmployeeFailed[awaiting_context<br/>Cannot verify ticket-history access]
+    HistoryEmployee -->|Verified| SearchTickets[MCP search_tickets<br/>requester email, status = open]
+    SearchTickets -->|Tool failure| TicketHistoryUnavailable[ticket_history_unavailable]
+    SearchTickets -->|No open tickets| TicketHistoryEmpty[ticket_history<br/>Return no open tickets]
+    SearchTickets -->|Verified matching tickets| TicketHistoryResult[ticket_history<br/>Return MCP-confirmed ticket IDs]
+
+    TicketHistory -->|No| TicketStatus{Status question contains IT-####?}
     TicketStatus -->|Yes| StatusEmail{Verified email available?}
     StatusEmail -->|No| StatusNeedsEmail[awaiting_context<br/>Ask for work email]
     StatusEmail -->|Yes| StatusEmployee[MCP lookup_employee]
@@ -537,6 +547,11 @@ flowchart TD
     TicketStatusUnavailable --> Output
     TicketAccessDenied --> Output
     TicketStatusResult --> Output
+    HistoryNeedsEmail --> Output
+    HistoryEmployeeFailed --> Output
+    TicketHistoryUnavailable --> Output
+    TicketHistoryEmpty --> Output
+    TicketHistoryResult --> Output
     Resolved --> Output
     EscalationOffer --> Output
     RepeatWorked --> Output
@@ -582,4 +597,6 @@ flowchart LR
 | `ticket_status` | A verified requester received the live status for their own ticket. |
 | `ticket_status_unavailable` | The ticket-status MCP read failed or found no ticket. |
 | `ticket_access_denied` | The requested ticket belongs to a different employee. |
+| `ticket_history` | A verified requester received their MCP-confirmed open-ticket list. |
+| `ticket_history_unavailable` | The ticket-history MCP read failed. |
 | `idle` | Approval endpoint finished, rejected, or found an invalid/consumed action. |

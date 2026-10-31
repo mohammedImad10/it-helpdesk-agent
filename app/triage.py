@@ -21,6 +21,17 @@ def extract_ticket_status_id(message: str) -> str | None:
     return None
 
 
+def requests_open_ticket_history(message: str) -> bool:
+    lowered = message.lower()
+    return bool(
+        re.search(
+            r"\b(?:what are|show|list|check|view)\b.{0,30}\b(?:my\s+)?(?:open\s+)?tickets?\b"
+            r"|\bmy\s+(?:open\s+)?tickets?\b",
+            lowered,
+        )
+    )
+
+
 def extract_issue(message: str) -> Issue:
     lowered = message.lower()
     codes = re.findall(r"\b[A-Z]{2,4}-\d{2,4}\b", message.upper())
