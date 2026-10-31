@@ -60,5 +60,8 @@ class HelpdeskMcpClient:
     async def get_service_status(self) -> tuple[dict[str, Any], ToolCall]:
         return await self.call("get_service_status", {})
 
+    async def get_ticket(self, ticket_id: str) -> tuple[dict[str, Any], ToolCall]:
+        return await self.call("get_ticket", {"ticket_id": ticket_id})
+
     async def create_ticket(self, draft: dict[str, Any], action_id: str) -> tuple[dict[str, Any], ToolCall]:
         return await self.call("create_ticket", {**draft, "idempotency_key": action_id})

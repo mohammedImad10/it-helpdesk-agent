@@ -71,3 +71,16 @@ def test_load_or_build_reembeds_a_keyword_only_index_when_provider_is_available(
     kb = KnowledgeBase.load_or_build()
 
     assert kb.has_embeddings
+
+
+def test_load_or_build_creates_a_missing_chroma_collection(monkeypatch, tmp_path) -> None:
+    provider = SemanticPdfProvider()
+    monkeypatch.setattr("app.retrieval.search.VECTOR_DB_PATH", tmp_path / "chroma")
+    monkeypatch.setattr(
+        "app.retrieval.search.EmbeddingProvider.from_environment", lambda: provider
+    )
+
+    kb = KnowledgeBase.load_or_build()
+
+    assert kb.collection.count() == len(kb.chunks)
+    assert kb.has_embeddings

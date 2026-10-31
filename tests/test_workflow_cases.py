@@ -32,6 +32,19 @@ class FakeMcpClient:
             ToolCall(tool="get_service_status", ok=True, ms=1),
         )
 
+    async def get_ticket(self, ticket_id: str):
+        return (
+            {
+                "ok": True,
+                "ticket": {
+                    "ticket_id": ticket_id,
+                    "requester_email": "tariq.hamdan@nakhla.example",
+                    "status": "open",
+                },
+            },
+            ToolCall(tool="get_ticket", ok=True, ms=1),
+        )
+
     async def create_ticket(self, draft: dict, idempotency_key: str):
         type(self).create_calls += 1
         return (
@@ -90,6 +103,27 @@ async def test_nx_403_returns_documented_steps_before_a_ticket(monkeypatch) -> N
     assert "VPN-Users" in response.reply
     assert [citation.id for citation in response.citations] == ["KB-002", "KB-007"]
     assert sessions.get(session_id).decision == "worked_confirmation"
+
+
+@pytest.mark.asyncio
+async def test_ticket_status_uses_verified_helpdesk_record(monkeypatch) -> None:
+    monkeypatch.setattr("app.workflow.HelpdeskMcpClient", FakeMcpClient)
+    workflow = HelpdeskWorkflow(KnowledgeBase.build())
+
+    response = await workflow.chat(
+        f"ticket-status-{uuid.uuid4()}",
+        "What is the status of ticket IT-2001?",
+        "tariq.hamdan@nakhla.example",
+    )
+
+    assert response.reply == "Ticket IT-2001 is currently open."
+    assert response.state == "ticket_status"
+    assert response.result == {"ticket_id": "IT-2001", "status": "open"}
+    assert [trace.tool for trace in response.tool_calls] == [
+        "input_guard",
+        "lookup_employee",
+        "get_ticket",
+    ]
 
 
 @pytest.mark.asyncio

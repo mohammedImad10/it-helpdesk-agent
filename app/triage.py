@@ -12,6 +12,15 @@ class Issue:
     affected_users: int
 
 
+def extract_ticket_status_id(message: str) -> str | None:
+    ticket_id = re.search(r"\bIT-\d{4}\b", message.upper())
+    if ticket_id is None:
+        return None
+    if re.search(r"\b(?:status|open|opened|closed|resolved|progress|update)\b", message.lower()):
+        return ticket_id.group(0)
+    return None
+
+
 def extract_issue(message: str) -> Issue:
     lowered = message.lower()
     codes = re.findall(r"\b[A-Z]{2,4}-\d{2,4}\b", message.upper())

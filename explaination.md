@@ -261,6 +261,87 @@ The `_draft()` helper in `app/workflow.py` constructs a `TicketDraft`, creates a
 - Requester email must be a Nakhla address.
 - Attempted steps and KB reference format are validated.
 
+### 2.9 Worked example: find relevant information for an NX-403 message
+
+This section follows one ordinary troubleshooting request from the user’s message to the final
+cited reply:
+
+```text
+My VPN shows NX-403. What should I do?
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant API as app/main.py<br/>chat()
+    participant W as app/workflow.py<br/>HelpdeskWorkflow.chat()
+    participant G as app/guardrails.py<br/>screen_input()
+    participant DB as SessionStore<br/>SQLite
+    participant M as HelpdeskMcpClient<br/>MCP
+    participant K as KnowledgeBase<br/>Chroma
+    participant R as HelpdeskRoles<br/>LangGraph
+    participant O as app/guardrails.py<br/>enforce_output()
+
+    U->>API: POST /api/chat with NX-403 message + email
+    API->>W: chat(session_id, message, email)
+    W->>G: screen_input(message)
+    G-->>W: allowed=True
+    W->>DB: get(session_id), save(email)
+    W->>M: lookup_employee(email)
+    M-->>W: verified employee department / VIP status
+    W->>M: get_service_status()
+    M-->>W: active incidents
+    W->>K: search(message, employee.department)
+    K->>K: extract NX-403, embed query, query Chroma
+    K->>K: apply current-source precedence + rank
+    K-->>W: selected source IDs, including KB-002 / KB-007
+    W->>R: run(message, parsed issue, source IDs, requester memory)
+    R-->>W: intake topic + resolution route
+    W->>W: apply incident / department / NX-403 policy
+    W-->>API: cited documented response + worked_confirmation state
+    API->>O: enforce_output(response, KB)
+    O-->>API: verified citations and ticket-ID claims
+    API-->>U: safe cited troubleshooting reply
+```
+
+#### Step-by-step code trace
+
+| Step | Exact code location | What happens |
+|---|---|---|
+| 1. HTTP validation | `app/main.py` → `chat()` | FastAPI validates the body as `ChatRequest`, extracts `user.email`, and calls `workflow.chat()`. |
+| 2. Input safety | `app/workflow.py` → `HelpdeskWorkflow.chat()`; `app/guardrails.py` → `screen_input()` | The message is screened before any database, retrieval, model, or MCP operation. A rejected message returns immediately. |
+| 3. Issue parsing | `app/triage.py` → `extract_issue()` | The regular expression extracts `NX-403`; the code classifies it as a VPN issue and detects whether the user explicitly requested a ticket. |
+| 4. Durable context | `app/services/sessions.py` → `SessionStore.get()` / `save()` | The app loads any previous issue/follow-up state, saves the supplied email, and keeps the conversation associated with the session ID. |
+| 5. Employee information | `app/workflow.py` → `client.lookup_employee()`; `app/mcp_client.py` → `lookup_employee()` | MCP retrieves the employee record. The workflow now knows the verified department and VIP status required for later policy decisions. |
+| 6. Live incident information | `app/workflow.py` → `client.get_service_status()` | MCP retrieves active incidents. If NX-403 were part of an active incident, the incident branch would return before normal troubleshooting. |
+| 7. Find KB candidates | `app/workflow.py` → `self.kb.search(message, employee["department"])` | The workflow asks the KB only after identity and status reads succeed. |
+| 8. Exact + semantic retrieval | `app/retrieval/search.py` → `KnowledgeBase.search()` | It extracts `NX-403`, creates a query embedding when OpenRouter is configured, asks Chroma for semantic candidates, and combines exact-code, semantic, and keyword scores. |
+| 9. Evidence eligibility | `app/retrieval/precedence.py` → `eligible()` | It removes non-current documents and ranks security policy, department applicability, authority, recency, and version deterministically. This prevents a draft or deprecated source from becoming evidence. |
+| 10. Role routing | `app/agent_graph.py` → `HelpdeskRoles.run()` | Intake confirms/refines the VPN topic. Resolution chooses a safe response route; it cannot invoke MCP or create tickets. |
+| 11. Deterministic NX-403 handling | `app/workflow.py` → `if issue.code == "NX-403"` | Python—not the role—selects the documented NakhlaKey/VPN-Users guidance and chooses `KB-002` and `KB-007` as citations. If the user had explicitly requested a ticket and the safe route were `draft`, Python would create only a pending draft. |
+| 12. Follow-up persistence | `app/workflow.py` → `_documented_response()` | The response is stored with `awaiting="worked_confirmation"`, the original message, issue, and KB references. The reply asks whether the procedure resolved the problem. |
+| 13. Final response safety | `app/main.py` → `enforce_output()`; `app/guardrails.py` → `valid_citations()` | Every citation must resolve to a current source. Any unconfirmed `IT-####` identifier is removed before the response is serialized back to the UI. |
+
+#### What the user receives
+
+The final `ChatResponse` contains:
+
+```json
+{
+  "session_id": "the existing session ID",
+  "state": "awaiting_follow_up",
+  "reply": "NX-403 means access was denied... Did that resolve the issue?",
+  "citations": ["KB-002", "KB-007"],
+  "pending_action": null,
+  "tool_calls": ["input_guard", "lookup_employee", "get_service_status", "roles", "output_guard"]
+}
+```
+
+The citation objects contain IDs and titles in the actual API response; the JSON above is a
+shortened conceptual example. A ticket is still not created. If the user says it did not work,
+the next message moves the persisted session into the explicit escalation-choice path.
+
 ## 3. Approval request: the only ticket-write path
 
 ### 3.1 Approval sequence
@@ -386,3 +467,119 @@ flowchart TD
 | SQLite session and action persistence | `app/services/sessions.py` | `SessionStore` |
 | Approval-only write gate | `app/approval.py` | `approve()` |
 | API data models | `app/models.py` | `ChatRequest`, `ApproveRequest`, `TicketDraft` |
+
+## 7. Complete request state flow
+
+The diagram below shows every chat-path state. Every arrow that returns a response passes through
+`enforce_output()` in `app/main.py` before the UI receives it. This final guard verifies citations
+and prevents an unconfirmed `IT-####` ticket ID from being shown.
+
+```mermaid
+flowchart TD
+    Start[POST /api/chat: session_id, message, optional email] --> InputGuard{Input guard: screen_input}
+    InputGuard -->|Unsafe prompt, secret request, or instruction override| GuardBlocked[guardrail_blocked<br/>No session, MCP, Chroma, or LangGraph call]
+    InputGuard -->|Allowed| Load[Load SQLite session<br/>email, issue, awaiting, decision, actions]
+    Load --> SaveEmail[Save supplied email, if any]
+    SaveEmail --> ApprovalPending{awaiting = approval?}
+
+    ApprovalPending -->|Yes| ExistingDraft[await_confirmation<br/>Return the existing stored draft only]
+    ApprovalPending -->|No| TicketStatus{Status question contains IT-####?}
+
+    TicketStatus -->|Yes| StatusEmail{Verified email available?}
+    StatusEmail -->|No| StatusNeedsEmail[awaiting_context<br/>Ask for work email]
+    StatusEmail -->|Yes| StatusEmployee[MCP lookup_employee]
+    StatusEmployee -->|Lookup failed| StatusEmployeeFailed[awaiting_context<br/>Cannot verify ticket access]
+    StatusEmployee -->|Verified| GetTicket[MCP get_ticket]
+    GetTicket -->|Tool failure or not found| TicketStatusUnavailable[ticket_status_unavailable]
+    GetTicket -->|Different requester| TicketAccessDenied[ticket_access_denied]
+    GetTicket -->|Matching requester| TicketStatusResult[ticket_status<br/>Return live open, resolved, or closed status]
+
+    TicketStatus -->|No| WorkedPending{awaiting = worked_confirmation?}
+    WorkedPending -->|Yes: worked| Remember[Save requester resolution memory]
+    Remember --> Resolved[resolved]
+    WorkedPending -->|Yes: did not work| EscalationOffer[escalation_offered<br/>Ask to prepare an escalation draft]
+    WorkedPending -->|Yes: other reply| RepeatWorked[awaiting_follow_up<br/>Repeat yes or no question]
+    WorkedPending -->|No| EscalationPending{awaiting = escalation_confirmation?}
+
+    EscalationPending -->|Yes: explicit request| CreateDraft[Save TicketDraft and PendingAction]
+    CreateDraft --> DraftReady[await_confirmation<br/>Return draft, wait for approval]
+    EscalationPending -->|Yes: no request| EscalationOffer
+    EscalationPending -->|No| ExtractIssue[Extract error code, topic, ticket intent, affected users]
+
+    ExtractIssue --> ContextCheck{Required email and VPN error code present?}
+    ContextCheck -->|No| ContextNeeded[awaiting_context<br/>Save awaiting = email or error_code]
+    ContextCheck -->|Yes| Employee[MCP lookup_employee]
+    Employee -->|Failed| EmployeeUnavailable[awaiting_context<br/>Do not apply unverified rules]
+    Employee -->|Verified| ServiceStatus[MCP get_service_status]
+    ServiceStatus -->|Failed| ServiceUnavailable[status_unavailable]
+    ServiceStatus -->|Verified| Retrieve[Chroma search plus deterministic precedence]
+    Retrieve --> Roles[LangGraph: intake_safety<br/>then resolution_escalation]
+
+    Roles --> Incident{Matching active incident?}
+    Incident -->|Yes| ActiveIncident[active_incident<br/>Give workaround; prevent duplicate ticket]
+    Incident -->|No| DepartmentPolicy{Contractor or Finance VPN policy?}
+    DepartmentPolicy -->|Contractor| ContractorResolved[resolved<br/>Return VDI guidance]
+    DepartmentPolicy -->|Finance| FinanceDraft[Save Security Operations ticket draft]
+    FinanceDraft --> DraftReady
+    DepartmentPolicy -->|No| Resolution{LangGraph resolution mode}
+
+    Resolution -->|escalate| EscalationOffer
+    Resolution -->|answer or draft| Evidence{Current documented procedure selected?}
+    Evidence -->|Known fixed procedure| Documented[awaiting_follow_up<br/>Cited answer plus Worked? question]
+    Evidence -->|Documented code, review required| ReviewRequired[review_required<br/>Cited source, no invented steps]
+    Evidence -->|No eligible fix| UnknownIssue[unknown_issue<br/>Honest escalation offer]
+    UnknownIssue --> EscalationOffer
+
+    GuardBlocked --> Output[enforce_output<br/>Validate current citations and confirmed ticket IDs]
+    ExistingDraft --> Output
+    StatusNeedsEmail --> Output
+    StatusEmployeeFailed --> Output
+    TicketStatusUnavailable --> Output
+    TicketAccessDenied --> Output
+    TicketStatusResult --> Output
+    Resolved --> Output
+    EscalationOffer --> Output
+    RepeatWorked --> Output
+    DraftReady --> Output
+    ContextNeeded --> Output
+    EmployeeUnavailable --> Output
+    ServiceUnavailable --> Output
+    ActiveIncident --> Output
+    ContractorResolved --> Output
+    Documented --> Output
+    ReviewRequired --> Output
+    Output --> Reply[Safe JSON response to UI]
+```
+
+### 7.1 Approval state is a separate write-only flow
+
+`await_confirmation` means a draft exists, not that a ticket exists. The UI must call
+`POST /api/approve` with the stored `action_id`:
+
+```mermaid
+flowchart LR
+    Approve[POST /api/approve] --> Action{Stored action valid and unused?}
+    Action -->|No| ApprovalIdle[idle<br/>No ticket created]
+    Action -->|Reject| Rejected[idle<br/>Consume action; no write]
+    Action -->|Approve| Write[MCP create_ticket<br/>Stored server draft only]
+    Write -->|Failed| Retry[await_confirmation<br/>Keep draft for retry]
+    Write -->|Confirmed| Created[idle<br/>ticket_created; save requester memory]
+```
+
+### 7.2 Response states and their meaning
+
+| API `state` | Meaning |
+|---|---|
+| `guardrail_blocked` | Input was unsafe; no downstream call ran. |
+| `awaiting_context` | Email or error code is required before safe processing. |
+| `awaiting_follow_up` | A cited procedure was returned; the app waits for Worked? confirmation. |
+| `escalation_offered` / `unknown_issue` | The app needs explicit consent before drafting an escalation. |
+| `await_confirmation` | A server-stored ticket draft is waiting for approval or retry. |
+| `active_incident` | Live service status matched the issue; show the workaround instead of creating a duplicate. |
+| `resolved` | A policy path or successful Worked? follow-up completed the issue. |
+| `review_required` | A current source was found, but the workflow will not invent procedure details. |
+| `status_unavailable` | The live service-status MCP read failed. |
+| `ticket_status` | A verified requester received the live status for their own ticket. |
+| `ticket_status_unavailable` | The ticket-status MCP read failed or found no ticket. |
+| `ticket_access_denied` | The requested ticket belongs to a different employee. |
+| `idle` | Approval endpoint finished, rejected, or found an invalid/consumed action. |

@@ -11,7 +11,7 @@ from app.mcp_client import HelpdeskMcpClient
 from app.models import ChatResponse, Citation, PendingAction, TicketDraft, ToolCall
 from app.retrieval.search import KnowledgeBase
 from app.services.sessions import StoredAction, sessions
-from app.triage import Issue, extract_issue
+from app.triage import Issue, extract_issue, extract_ticket_status_id
 
 
 class HelpdeskWorkflow:
@@ -203,6 +203,50 @@ class HelpdeskWorkflow:
                 state="await_confirmation",
                 pending_action=pending,
                 tool_calls=[guard_trace],
+            )
+        ticket_status_id = extract_ticket_status_id(message)
+        if ticket_status_id:
+            if not session.email:
+                self._save_decision(session_id, session, "missing_context", "email")
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="Please provide your Nakhla work email so I can verify ticket access.",
+                    state="awaiting_context",
+                    tool_calls=[guard_trace],
+                )
+            client = HelpdeskMcpClient()
+            employee_result, employee_trace = await client.lookup_employee(session.email)
+            traces = [guard_trace, employee_trace]
+            if not employee_result.get("ok"):
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I could not verify your employee details, so I cannot safely check ticket status.",
+                    state="awaiting_context",
+                    tool_calls=traces,
+                )
+            ticket_result, ticket_trace = await client.get_ticket(ticket_status_id)
+            traces.append(ticket_trace)
+            if not ticket_result.get("ok"):
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I could not retrieve that ticket's status from the helpdesk.",
+                    state="ticket_status_unavailable",
+                    tool_calls=traces,
+                )
+            ticket = ticket_result["ticket"]
+            if ticket.get("requester_email", "").lower() != employee_result["employee"]["email"].lower():
+                return ChatResponse(
+                    session_id=session_id,
+                    reply="I can only provide the status of tickets associated with your verified account.",
+                    state="ticket_access_denied",
+                    tool_calls=traces,
+                )
+            return ChatResponse(
+                session_id=session_id,
+                reply=f"Ticket {ticket_status_id} is currently {ticket['status']}.",
+                state="ticket_status",
+                result={"ticket_id": ticket_status_id, "status": ticket["status"]},
+                tool_calls=traces,
             )
         if awaiting_worked:
             if self._reports_worked(message):

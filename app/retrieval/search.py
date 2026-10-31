@@ -11,10 +11,11 @@ import chromadb
 import fitz
 import yaml
 from chromadb.config import Settings
+from chromadb.errors import InvalidCollectionException
 
 from app.config import EMBEDDING_MODEL, KB_ROOT, VECTOR_DB_PATH
 from app.retrieval.embeddings import EmbeddingProvider, build_embeddings
-from app.retrieval.precedence import eligible
+from app.retrieval.precedence import eligible, precedence_key
 
 COLLECTION_NAME = "helpdesk_kb"
 CHROMA_SETTINGS = Settings(anonymized_telemetry=False)
@@ -89,7 +90,7 @@ class KnowledgeBase:
             stored_embeddings = bool((collection.metadata or {}).get("has_embeddings"))
             if stored_model == EMBEDDING_MODEL and (provider is None or stored_embeddings):
                 return cls._from_collection(collection, client, stored_embeddings)
-        except ValueError:
+        except (ValueError, InvalidCollectionException):
             pass
 
         kb = cls.build(embedding_provider=provider)
@@ -153,7 +154,7 @@ class KnowledgeBase:
         client = chromadb.PersistentClient(path=str(VECTOR_DB_PATH), settings=CHROMA_SETTINGS)
         try:
             client.delete_collection(COLLECTION_NAME)
-        except ValueError:
+        except (ValueError, InvalidCollectionException):
             pass
         self._client = client
         self.collection = self._create_collection(client, self.has_embeddings)
@@ -184,16 +185,42 @@ class KnowledgeBase:
         candidates = eligible([asdict(chunk) for chunk in self.chunks], department)
         semantic_scores = self._semantic_scores(self._query_embedding(query), limit)
 
-        def score(item: dict[str, Any]) -> tuple[int, float, int, str]:
+        def score(item: dict[str, Any]) -> tuple[int, float, int]:
             chunk = item["text"].lower()
             meta = item["metadata"]
             exact = len(error_codes.intersection(set(meta.get("error_codes") or [])))
             words = sum(term in chunk for term in terms if len(term) > 2)
             semantic = semantic_scores.get(str(item["vector_id"]), 0.0)
-            return exact, semantic, words, str(meta["id"])
+            return exact, semantic, words
 
-        matching = [item for item in candidates if score(item)[:3] != (0, 0.0, 0)]
-        return [Chunk(**item) for item in sorted(matching, key=score, reverse=True)[:limit]]
+        matching = [item for item in candidates if score(item) != (0, 0.0, 0)]
+        best_by_document: dict[str, dict[str, Any]] = {}
+        for item in matching:
+            document_id = str(item["metadata"]["id"])
+            existing = best_by_document.get(document_id)
+            if existing is None or score(item) > score(existing):
+                best_by_document[document_id] = item
+
+        def rank(item: dict[str, Any]) -> tuple[Any, ...]:
+            exact, semantic, words = score(item)
+            precedence = precedence_key(item, department)
+            if exact:
+                return (
+                    -exact,
+                    precedence,
+                    -semantic,
+                    -words,
+                    str(item["vector_id"]),
+                )
+            return (
+                0,
+                -semantic,
+                -words,
+                precedence,
+                str(item["vector_id"]),
+            )
+
+        return [Chunk(**item) for item in sorted(best_by_document.values(), key=rank)[:limit]]
 
     def by_id(self, doc_id: str) -> Chunk | None:
         return next((chunk for chunk in self.chunks if chunk.metadata["id"] == doc_id), None)
